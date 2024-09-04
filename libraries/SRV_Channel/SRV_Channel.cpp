@@ -236,6 +236,7 @@ void SRV_Channel::calc_pwm(float output_scaled)
 void SRV_Channel::set_output_pwm(uint16_t pwm, bool force)
 {
     if (!override_active || force) {
+        hal.console->printf("----set_output_pwm---- enter\n");
         output_pwm = pwm;
         have_pwm_mask |= (1U<<ch_num);
     }

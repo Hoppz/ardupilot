@@ -12,10 +12,15 @@
 // Libraries
 #include <AP_HAL/AP_HAL.h>
 #include <AP_BattMonitor/AP_BattMonitor.h>
+// include AP_Motor_Class.h , AP_MotorMatrix ...
 #include <AP_Motors/AP_Motors.h>
 #include <SRV_Channel/SRV_Channel.h>
 #include <AP_ESC_Telem/AP_ESC_Telem.h>
 #include <stdio.h>
+
+#include <AP_BoardConfig/AP_BoardConfig.h>
+#include <AP_IOMCU/AP_IOMCU.h>
+AP_BoardConfig BoardConfig;
 
 const AP_HAL::HAL& hal = AP_HAL::get_HAL();
 
@@ -26,6 +31,8 @@ void motor_order_test();
 void stability_test();
 void update_motors();
 void print_all_motor_matrix();
+void arm_info();
+void vaild_info();
 
 // Instantiate a few classes that will be needed so that the singletons can be called from the motors lib
 #if HAL_WITH_ESC_TELEM
@@ -42,9 +49,9 @@ AP_MotorsHeli *motors_heli;
 AP_MotorsMatrix *motors_matrix;
 
 bool thrust_boost = false;
-
 uint8_t num_outputs;
 
+int flag = 0;
 // setup
 void setup()
 {
@@ -256,7 +263,7 @@ void setup()
             motors->init(AP_Motors::MOTOR_FRAME_QUAD, AP_Motors::MOTOR_FRAME_TYPE_X);
             num_outputs = 4;
         }
-
+        flag = 1;
         // motor initialisation
         motors->set_dt(1.0/400.0);
         motors->set_update_rate(490);
@@ -284,20 +291,29 @@ void setup()
         exit(0);
 
     } else {
+#if CONFIG_HAL_BOARD == HAL_BOARD_CHIBIOS
+        BoardConfig.init();
+#endif
+        // enable
+        for (uint8_t i=0; i < 16; i++) {
+            hal.rcout->enable_ch(i);
+        }
+        hal.rcout->force_safety_off();
+        // enable
+
+        
+        flag = 2;
         // We haven't been given a frame class so we just assume a quad frame as default
         motors_matrix = new AP_MotorsMatrix(400);
         motors = motors_matrix;
         motors->init(AP_Motors::MOTOR_FRAME_QUAD, AP_Motors::MOTOR_FRAME_TYPE_X);
         num_outputs = 4;
+        motors->output_min();
     }
 
     // motor initialisation
     motors->set_dt(1.0/400.0);
     motors->set_update_rate(490);
-
-    char frame_and_type_string[30];
-    motors->get_frame_and_type_string(frame_and_type_string, ARRAY_SIZE(frame_and_type_string));
-    hal.console->printf("%s\n", frame_and_type_string);
 
     if (motors_matrix != nullptr) {
         motors_matrix->update_throttle_range();
@@ -416,8 +432,14 @@ void print_all_motor_matrix()
 // stability_test
 void motor_order_test()
 {
-    hal.console->printf("testing motor order\n");
+    hal.console->printf("testing motor order | flag : %d \n",flag);
+
+
+    vaild_info();
+    arm_info();
     motors->armed(true);
+    motors->set_interlock(true);
+
     for (int8_t i=1; i <= num_outputs; i++) {
         hal.console->printf("Motor %d\n",(int)i);
         motors->output_test_seq(i, 1150);
@@ -425,9 +447,43 @@ void motor_order_test()
         motors->output_test_seq(i, 1000);
         hal.scheduler->delay(2000);
     }
-    motors->armed(false);
 
+    arm_info();
+    motors->armed(false);
+    motors->set_interlock(false);
 }
+
+void vaild_info()
+{
+    char frame_and_type_string[30];
+    motors->get_frame_and_type_string(frame_and_type_string, ARRAY_SIZE(frame_and_type_string));
+    hal.console->printf("%s\n", frame_and_type_string);
+
+    if( motors->initialised_ok() ){
+        hal.console->printf("initialised ok \n");
+    } else {
+        hal.console->printf("initialised failed \n");
+    }
+
+    if( motors == motors_matrix ){
+        hal.console->printf("motors == motors_matrix \n");
+    }
+}
+
+void arm_info()
+{
+    if(hal.util->safety_switch_state() == AP_HAL::Util::SAFETY_ARMED){
+        hal.console->printf("SAFETY_ARMED \n");
+    }
+    if(hal.util->safety_switch_state() == AP_HAL::Util::SAFETY_DISARMED){
+        hal.console->printf("SAFETY_DISARMED \n");
+    }
+    if(hal.util->safety_switch_state() == AP_HAL::Util::SAFETY_NONE){
+        hal.console->printf("SAFETY_NONE \n");
+    }
+    hal.console->printf("ARMED?: %d\n",hal.util->get_soft_armed());
+}
+
 
 // stability_test
 void stability_test()

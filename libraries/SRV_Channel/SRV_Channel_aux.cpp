@@ -337,11 +337,13 @@ void SRV_Channels::enable_by_mask(uint32_t mask)
  */
 void SRV_Channels::set_output_pwm(SRV_Channel::Aux_servo_function_t function, uint16_t value)
 {
+    hal.console->printf("----set_output_pwm----\n");
     if (!function_assigned(function)) {
         return;
     }
     for (uint8_t i = 0; i < NUM_SERVO_CHANNELS; i++) {
         if (channels[i].function == function) {
+            hal.console->printf("set_output_pwm | i : %d, value : %d \n",i,value);
             channels[i].set_output_pwm(value);
             channels[i].output_ch();
         }

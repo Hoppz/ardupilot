@@ -108,7 +108,6 @@ void singleSignal(uint16_t _pwm)
 {
     for(uint8_t j = 0 ; j < 30 ; j++){
         for(uint8_t i = 0 ; i < 16 ; i++){
-            hal.rcout->enable_ch(i);
             hal.rcout->write(i, _pwm);
             hal.scheduler->delay(5);
         }
