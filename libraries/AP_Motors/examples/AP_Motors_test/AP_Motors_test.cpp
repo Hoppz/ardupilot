@@ -301,7 +301,7 @@ void setup()
         hal.rcout->force_safety_off();
         // enable
 
-        
+
         flag = 2;
         // We haven't been given a frame class so we just assume a quad frame as default
         motors_matrix = new AP_MotorsMatrix(400);
@@ -443,7 +443,7 @@ void motor_order_test()
     for (int8_t i=1; i <= num_outputs; i++) {
         hal.console->printf("Motor %d\n",(int)i);
         motors->output_test_seq(i, 1150);
-        hal.scheduler->delay(300);
+        hal.scheduler->delay(3000);
         motors->output_test_seq(i, 1000);
         hal.scheduler->delay(2000);
     }

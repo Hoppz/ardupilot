@@ -114,8 +114,6 @@ bool AP_MotorsMatrix::set_throttle_factor(int8_t motor_num, float throttle_facto
 // set update rate to motors - a value in hertz
 void AP_MotorsMatrix::set_update_rate(uint16_t speed_hz)
 {
-    hal.console->printf("----set_update_rate----");
-
     // record requested speed
     _speed_hz = speed_hz;
 
@@ -466,17 +464,10 @@ void AP_MotorsMatrix::check_for_failed_motor(float throttle_thrust_best_plus_adj
 //  pwm value is an actual pwm value that will be output, normally in the range of 1000 ~ 2000
 void AP_MotorsMatrix::_output_test_seq(uint8_t motor_seq, int16_t pwm)
 {
-    // hal.console->printf("----AP_MotorMatrix/output_test_seq----\n");
     // loop through all the possible orders spinning any motors that match that description
     for (uint8_t i = 0; i < AP_MOTORS_MAX_NUM_MOTORS; i++) {
-
-        // hal.console->printf("AP_MotorMatrix/output_test_seq | i : %d\n",i);
-        // hal.console->printf("AP_MotorMatrix/output_test_seq | motor_enabled[i] : %d\n",motor_enabled[i]);
-        // hal.console->printf("AP_MotorMatrix/output_test_seq | _test_order[i] : %u, motor_seq : %u \n",_test_order[i],motor_seq);
-
         if (motor_enabled[i] && _test_order[i] == motor_seq) {
             // turn on this motor
-            // hal.console->printf("AP_MotorMatrix/output_test_seq | enter rc_write \n");
             rc_write(i, pwm);
         }
     }
