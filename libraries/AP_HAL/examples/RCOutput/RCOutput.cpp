@@ -42,6 +42,12 @@ void setup (void)
 
     hal.rcout->set_freq(0xFF, SERVO_HZ);
     hal.util->set_soft_armed(true);
+
+    // enable
+    for (uint8_t i=0; i < 16; i++) {
+        hal.rcout->enable_ch(i);
+    }
+
     hal.scheduler->delay(1000);
 }
 
@@ -84,7 +90,6 @@ static int8_t delta = 1;
 void upDownSignal()
 {
     for (uint8_t i=0; i < 16; i++) {
-        hal.rcout->enable_ch(i);
         hal.rcout->write(i, pwm);
         pwm += delta;
         if (delta > 0 && pwm >= 1200) {
