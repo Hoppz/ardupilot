@@ -442,10 +442,10 @@ void motor_order_test()
 
     for (int8_t i=1; i <= num_outputs; i++) {
         hal.console->printf("Motor %d\n",(int)i);
-        motors->output_test_seq(i, 1150);
-        hal.scheduler->delay(3000);
-        motors->output_test_seq(i, 1000);
+        motors->output_test_seq(i, 1050);
         hal.scheduler->delay(2000);
+        motors->output_test_seq(i, 1000);
+        hal.scheduler->delay(1000);
     }
 
     arm_info();
