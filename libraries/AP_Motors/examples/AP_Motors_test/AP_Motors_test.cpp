@@ -465,9 +465,6 @@ void vaild_info()
         hal.console->printf("initialised failed \n");
     }
 
-    if( motors == motors_matrix ){
-        hal.console->printf("motors == motors_matrix \n");
-    }
 }
 
 void arm_info()
