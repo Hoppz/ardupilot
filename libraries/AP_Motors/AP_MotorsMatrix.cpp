@@ -161,7 +161,7 @@ void AP_MotorsMatrix::output_to_motors()
                     set_actuator_with_slew(_actuator[i], actuator_spin_up_to_ground_idle());
                 }
             }
-            break;
+                break;
         case SpoolState::SPOOLING_UP:
         case SpoolState::THROTTLE_UNLIMITED:
         case SpoolState::SPOOLING_DOWN:
@@ -1192,6 +1192,34 @@ bool AP_MotorsMatrix::setup_y6_matrix(motor_frame_type frame_type)
     return true;
 }
 #endif // AP_MOTORS_FRAME_Y6_ENABLED
+#if AP_MOTORS_FRAME_HEXAOCTA_ENABLED
+    bool AP_MotorsMatrix::setup_hexaocta_matrix()
+{
+    _mav_type =  MAV_TYPE_HEXADECAROTOR;
+    _frame_class_string = "HEXAOCTA";
+    _frame_type_string = "X";
+    static const AP_MotorsMatrix::MotorDef motors[] {
+        {   22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  1 },
+        {   22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  2 },
+        {   67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   3 },
+        {   67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   4 },
+        {  112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  5 },
+        {  112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  6 },
+        {  157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   7 },
+        {  157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   8 },
+        { -157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  9 },
+        { -157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  10 },
+        { -112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   11 },
+        { -112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   12 },
+        {  -67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  13 },
+        {  -67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  14 },
+        {  -22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   15 },
+        {  -22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   16 },
+    };
+    add_motors(motors, ARRAY_SIZE(motors));
+    return true;
+}
+#endif // AP_MOTORS_FRAME_HEXAOCTA_ENABLED
 #if AP_MOTORS_FRAME_DECA_ENABLED
 bool AP_MotorsMatrix::setup_deca_matrix(motor_frame_type frame_type)
 {
@@ -1286,6 +1314,11 @@ void AP_MotorsMatrix::setup_motors(motor_frame_class frame_class, motor_frame_ty
         success = setup_deca_matrix(frame_type);
         break;
 #endif //AP_MOTORS_FRAME_DECA_ENABLED
+#if AP_MOTORS_FRAME_HEXAOCTA_ENABLED
+    case MOTOR_FRAME_HEXAOCTA:
+        success = setup_hexaocta_matrix();
+        break;
+#endif // AP_MOTORS_FRAME_HEXAOCTA_ENABLED
     default:
         // matrix doesn't support the configured class
         success = false;
