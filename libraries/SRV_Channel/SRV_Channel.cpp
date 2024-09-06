@@ -155,7 +155,7 @@ const AP_Param::GroupInfo SRV_Channel::var_info[] = {
     // @Values: 138:Alarm,139:Alarm Inverted
     // @Values{Plane, Copter, Rover}: 138:Alarm,139:Alarm Inverted
     // @Values: 140:RCIN1Scaled,141:RCIN2Scaled,142:RCIN3Scaled,143:RCIN4Scaled,144:RCIN5Scaled,145:RCIN6Scaled,146:RCIN7Scaled,147:RCIN8Scaled,148:RCIN9Scaled,149:RCIN10Scaled,150:RCIN11Scaled,151:RCIN12Scaled,152:RCIN13Scaled,153:RCIN14Scaled,154:RCIN15Scaled,155:RCIN16Scaled
-    // @Values{Plane, Copter, Rover}: 140:RCIN1Scaled,141:RCIN2Scaled,142:RCIN3Scaled,143:RCIN4Scaled,144:RCIN5Scaled,145:RCIN6Scaled,146:RCIN7Scaled,147:RCIN8Scaled,148:RCIN9Scaled,149:RCIN10Scaled,150:RCIN11Scaled,151:RCIN12Scaled,152:RCIN13Scaled,153:RCIN14Scaled,154:RCIN15Scaled,155:RCIN16Scaled
+    // @Values{Plane, Copter, Rover}: 140:RCIN1Scaled,141:RCIN2Scaled,142:RCIN3Scaled,143:RCIN4Scaled,144:RCIN5Scaled,145:RCIN6Scaled,146:RCIN7Scaled,147:RCIN8Scaled,148:RCIN9Scaled,149:RCIN10Scaled,150:RCIN11Scaled,151:RCIN12Scaled,152:RCIN13Scaled,153:RCIN14Scaled,154:RCIN15Scaled,155:RCIN16Scaled,156:k_motor13,157:k_motor14,158:k_motor15,159:k_motor16
     // @User: Standard
     // @RebootRequired: True
     AP_GROUPINFO("FUNCTION",  5, SRV_Channel, function, 0),
@@ -236,7 +236,6 @@ void SRV_Channel::calc_pwm(float output_scaled)
 void SRV_Channel::set_output_pwm(uint16_t pwm, bool force)
 {
     if (!override_active || force) {
-        hal.console->printf("----set_output_pwm---- enter\n");
         output_pwm = pwm;
         have_pwm_mask |= (1U<<ch_num);
     }
@@ -307,7 +306,8 @@ uint16_t SRV_Channel::get_limit_pwm(Limit limit) const
 bool SRV_Channel::is_motor(SRV_Channel::Aux_servo_function_t function)
 {
     return ((function >= SRV_Channel::k_motor1 && function <= SRV_Channel::k_motor8) ||
-            (function >= SRV_Channel::k_motor9 && function <= SRV_Channel::k_motor12));
+            (function >= SRV_Channel::k_motor9 && function <= SRV_Channel::k_motor12) ||
+            (function >= SRV_Channel::k_motor13 && function <= SRV_Channel::k_motor16));
 }
 
 // return true if function is for anything that should be stopped in a e-stop situation, ie is dangerous
@@ -333,6 +333,10 @@ bool SRV_Channel::should_e_stop(SRV_Channel::Aux_servo_function_t function)
     case Aux_servo_function_t::k_motor10:
     case Aux_servo_function_t::k_motor11:
     case Aux_servo_function_t::k_motor12:
+    case Aux_servo_function_t::k_motor13:
+    case Aux_servo_function_t::k_motor14:
+    case Aux_servo_function_t::k_motor15:
+    case Aux_servo_function_t::k_motor16:
     case Aux_servo_function_t::k_engine_run_enable:
         return true;
     default:
@@ -381,6 +385,8 @@ int8_t SRV_Channel::get_motor_num(void) const
         return int8_t(uint16_t(k_function) - k_motor1);
     case k_motor9 ... k_motor12:
         return 8 + int8_t(uint16_t(k_function) - k_motor9);
+    case k_motor13 ... k_motor16:
+        return 12 + int8_t(uint16_t(k_function) - k_motor13);
     default:
         break;
     }
