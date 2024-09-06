@@ -109,7 +109,6 @@ void AP_Motors::rc_write(uint8_t chan, uint16_t pwm)
         // note that PWM_MIN/MAX has been forced to 1000/2000
         SRV_Channels::set_output_scaled(function, pwm - 1000);
     } else {
-        hal.console->printf("----set_output_scaled----\n");
         SRV_Channels::set_output_pwm(function, pwm);
     }
 }
@@ -279,18 +278,6 @@ void AP_Motors::set_frame_string(const char * str) {
 //  pwm value is an actual pwm value that will be output, normally in the range of 1000 ~ 2000
 void AP_Motors::output_test_seq(uint8_t motor_seq, int16_t pwm)
 {
-    // hal.console->printf("----AP_Motor_Class/output_test_seq----\n");
-
-    // if(armed() ){
-    //     hal.console->printf("----AP_Motor_Class/output_test_seq   armed() true ----\n");
-    // }  else {
-    //     hal.console->printf("----AP_Motor_Class/output_test_seq   armed() false ----\n");
-    // }
-    // if( _interlock ){
-    //     hal.console->printf("----AP_Motor_Class/output_test_seq   _interlock true ----\n");
-    // } else {
-    //     hal.console->printf("----AP_Motor_Class/output_test_seq   _interlock false ----\n");
-    // }
 
     if (armed() && _interlock) {
         
