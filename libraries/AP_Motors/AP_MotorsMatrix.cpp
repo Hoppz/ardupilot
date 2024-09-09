@@ -215,6 +215,8 @@ void AP_MotorsMatrix::output_armed_stabilizing()
     // apply voltage and air pressure compensation
     const float compensation_gain = thr_lin.get_compensation_gain(); // compensation for battery voltage and altitude
 
+    //*  1. 计算飞行输入
+
     // pitch thrust input value, +/- 1.0
     const float roll_thrust = (_roll_in + _roll_in_ff) * compensation_gain;
 
@@ -226,6 +228,8 @@ void AP_MotorsMatrix::output_armed_stabilizing()
 
     // throttle thrust input value, 0.0 - 1.0
     float throttle_thrust = get_throttle() * compensation_gain;
+
+    //* 2. 限制最大油门
 
     // throttle thrust average maximum value, 0.0 - 1.0
     float throttle_avg_max = _throttle_avg_max * compensation_gain;
@@ -306,6 +310,8 @@ void AP_MotorsMatrix::output_armed_stabilizing()
 
     // Let yaw access minimum amount of head room
     yaw_allowed = MAX(yaw_allowed, yaw_allowed_min);
+
+    //* 处理 motor 失效
 
     // Include the lost motor scaled by _thrust_boost_ratio to smoothly transition this motor in and out of the calculation
     if (_thrust_boost && motor_enabled[_motor_lost_index]) {
@@ -1198,24 +1204,66 @@ bool AP_MotorsMatrix::setup_y6_matrix(motor_frame_type frame_type)
     _mav_type =  MAV_TYPE_HEXADECAROTOR;
     _frame_class_string = "HEXAOCTA";
     _frame_type_string = "X";
-    static const AP_MotorsMatrix::MotorDef motors[] {
-        {   22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  1 },
-        {   22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  2 },
-        {   67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   3 },
-        {   67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   4 },
-        {  112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  5 },
-        {  112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  6 },
-        {  157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   7 },
-        {  157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   8 },
-        { -157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  9 },
-        { -157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  10 },
-        { -112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   11 },
-        { -112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   12 },
-        {  -67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  13 },
-        {  -67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  14 },
-        {  -22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   15 },
-        {  -22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   16 },
-    };
+    // static const AP_MotorsMatrix::MotorDef motors[] {
+    //     {   22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  1 },
+    //     {   22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  2 },
+    //     {   67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   3 },
+    //     {   67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   4 },
+    //     {  112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  5 },
+    //     {  112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  6 },
+    //     {  157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   7 },
+    //     {  157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   8 },
+    //     { -157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  9 },
+    //     { -157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  10 },
+    //     { -112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   11 },
+    //     { -112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   12 },
+    //     {  -67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  13 },
+    //     {  -67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  14 },
+    //     {  -22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   15 },
+    //     {  -22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   16 },
+    // };
+
+    // static const AP_MotorsMatrix::MotorDef motors[] {
+    //     {   112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  1 },
+    //     {   112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  2 },
+    //     {   157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   3 },
+    //     {   157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   4 },
+    //     {  -157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  5 },
+    //     {  -157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  6 },
+    //     {  -112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   7 },
+    //     {  -112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   8 },
+    //     {   -67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  9 },
+    //     {   -67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  10 },
+    //     {   -22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   11 },
+    //     {   -22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   12 },
+    //     {    22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  13 },
+    //     {    22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  14 },
+    //     {    67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   15 },
+    //     {    67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   16 },
+    // };
+
+        static const AP_MotorsMatrix::MotorDef motors[] {
+            {   22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   1 },
+            {   22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   2 },
+            { -157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   9 },
+            { -157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   10 },
+            {   67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  3 },
+            {   67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  4 },
+            {  157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  7 },
+            {  157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  8 },
+            {  -22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  15 },
+            {  -22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  16 },
+            { -112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  11 },
+            { -112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  12 },
+            {  -67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   13 },
+            {  -67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   14 },
+            {  112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   5 },
+            {  112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   6 },
+        };
+
+    
+
+
     add_motors(motors, ARRAY_SIZE(motors));
     return true;
 }
@@ -1278,54 +1326,54 @@ void AP_MotorsMatrix::setup_motors(motor_frame_class frame_class, motor_frame_ty
     set_initialised_ok(false);
     bool success = true;
 
-    switch (frame_class) {
-#if AP_MOTORS_FRAME_QUAD_ENABLED
-    case MOTOR_FRAME_QUAD:
-        success = setup_quad_matrix(frame_type);
-        break;  // quad
-#endif //AP_MOTORS_FRAME_QUAD_ENABLED
-#if AP_MOTORS_FRAME_HEXA_ENABLED
-    case MOTOR_FRAME_HEXA:
-        success = setup_hexa_matrix(frame_type);
-        break;
-#endif //AP_MOTORS_FRAME_HEXA_ENABLED
-#if AP_MOTORS_FRAME_OCTA_ENABLED
-    case MOTOR_FRAME_OCTA:
-        success = setup_octa_matrix(frame_type);
-        break;
-#endif //AP_MOTORS_FRAME_OCTA_ENABLED
-#if AP_MOTORS_FRAME_OCTAQUAD_ENABLED
-    case MOTOR_FRAME_OCTAQUAD:
-        success = setup_octaquad_matrix(frame_type);
-        break;
-#endif //AP_MOTORS_FRAME_OCTAQUAD_ENABLED
-#if AP_MOTORS_FRAME_DODECAHEXA_ENABLED
-    case MOTOR_FRAME_DODECAHEXA:
-        success = setup_dodecahexa_matrix(frame_type);
-        break;
-#endif //AP_MOTORS_FRAME_DODECAHEXA_ENABLED
-#if AP_MOTORS_FRAME_Y6_ENABLED
-    case MOTOR_FRAME_Y6:
-        success = setup_y6_matrix(frame_type);
-        break;
-#endif //AP_MOTORS_FRAME_Y6_ENABLED
-#if AP_MOTORS_FRAME_DECA_ENABLED
-    case MOTOR_FRAME_DECA:
-        success = setup_deca_matrix(frame_type);
-        break;
-#endif //AP_MOTORS_FRAME_DECA_ENABLED
-#if AP_MOTORS_FRAME_HEXAOCTA_ENABLED
-    case MOTOR_FRAME_HEXAOCTA:
-        success = setup_hexaocta_matrix();
-        break;
-#endif // AP_MOTORS_FRAME_HEXAOCTA_ENABLED
-    default:
-        // matrix doesn't support the configured class
-        success = false;
-        _mav_type = MAV_TYPE_GENERIC;
-        break;
-    } // switch frame_class
-
+//     switch (frame_class) {
+// #if AP_MOTORS_FRAME_QUAD_ENABLED
+//     case MOTOR_FRAME_QUAD:
+//         success = setup_quad_matrix(frame_type);
+//         break;  // quad
+// #endif //AP_MOTORS_FRAME_QUAD_ENABLED
+// #if AP_MOTORS_FRAME_HEXA_ENABLED
+//     case MOTOR_FRAME_HEXA:
+//         success = setup_hexa_matrix(frame_type);
+//         break;
+// #endif //AP_MOTORS_FRAME_HEXA_ENABLED
+// #if AP_MOTORS_FRAME_OCTA_ENABLED
+//     case MOTOR_FRAME_OCTA:
+//         success = setup_octa_matrix(frame_type);
+//         break;
+// #endif //AP_MOTORS_FRAME_OCTA_ENABLED
+// #if AP_MOTORS_FRAME_OCTAQUAD_ENABLED
+//     case MOTOR_FRAME_OCTAQUAD:
+//         success = setup_octaquad_matrix(frame_type);
+//         break;
+// #endif //AP_MOTORS_FRAME_OCTAQUAD_ENABLED
+// #if AP_MOTORS_FRAME_DODECAHEXA_ENABLED
+//     case MOTOR_FRAME_DODECAHEXA:
+//         success = setup_dodecahexa_matrix(frame_type);
+//         break;
+// #endif //AP_MOTORS_FRAME_DODECAHEXA_ENABLED
+// #if AP_MOTORS_FRAME_Y6_ENABLED
+//     case MOTOR_FRAME_Y6:
+//         success = setup_y6_matrix(frame_type);
+//         break;
+// #endif //AP_MOTORS_FRAME_Y6_ENABLED
+// #if AP_MOTORS_FRAME_DECA_ENABLED
+//     case MOTOR_FRAME_DECA:
+//         success = setup_deca_matrix(frame_type);
+//         break;
+// #endif //AP_MOTORS_FRAME_DECA_ENABLED
+// #if AP_MOTORS_FRAME_HEXAOCTA_ENABLED
+//     case MOTOR_FRAME_HEXAOCTA:
+//         success = setup_hexaocta_matrix();
+//         break;
+// #endif // AP_MOTORS_FRAME_HEXAOCTA_ENABLED
+//     default:
+//         // matrix doesn't support the configured class
+//         success = false;
+//         _mav_type = MAV_TYPE_GENERIC;
+//         break;
+//     } // switch frame_class
+    success = setup_hexaocta_matrix();
     // normalise factors to magnitude 0.5
     normalise_rpy_factors();
 
