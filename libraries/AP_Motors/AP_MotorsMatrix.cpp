@@ -1242,24 +1242,45 @@ bool AP_MotorsMatrix::setup_y6_matrix(motor_frame_type frame_type)
     //     {    67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   16 },
     // };
 
-        static const AP_MotorsMatrix::MotorDef motors[] {
-            {   22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   1 },
-            {   22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   2 },
-            { -157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   9 },
-            { -157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   10 },
-            {   67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  3 },
-            {   67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  4 },
-            {  157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  7 },
-            {  157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  8 },
-            {  -22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  15 },
-            {  -22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  16 },
-            { -112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  11 },
-            { -112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  12 },
-            {  -67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   13 },
-            {  -67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   14 },
-            {  112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   5 },
-            {  112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   6 },
-        };
+    // 上下同转
+    // static const AP_MotorsMatrix::MotorDef motors[] {
+        //     {   22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   1 },
+        //     {   22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   2 },
+        //     { -157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   9 },
+        //     { -157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   10 },
+        //     {   67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  3 },
+        //     {   67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  4 },
+        //     {  157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  7 },
+        //     {  157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  8 },
+        //     {  -22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  15 },
+        //     {  -22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  16 },
+        //     { -112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  11 },
+        //     { -112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  12 },
+        //     {  -67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   13 },
+        //     {  -67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   14 },
+        //     {  112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   5 },
+        //     {  112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   6 },
+        // };
+
+    // 上下反转
+    static const AP_MotorsMatrix::MotorDef motors[] {
+        {   22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   1 },
+        {   22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,   2 },
+        { -157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   9 },
+        { -157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,   10 },
+        {   67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  3 },
+        {   67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,  4 },
+        {  157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  7 },
+        {  157.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,  8 },
+        {  -22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  15 },
+        {  -22.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,  16 },
+        { -112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,  11 },
+        { -112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,  12 },
+        {  -67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   13 },
+        {  -67.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,   14 },
+        {  112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CW,   5 },
+        {  112.5f,  AP_MOTORS_MATRIX_YAW_FACTOR_CCW,   6 },
+    };
 
     
 
