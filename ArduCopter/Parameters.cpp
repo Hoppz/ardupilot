@@ -28,7 +28,7 @@
 #endif
 
 const AP_Param::Info Copter::var_info[] = {
-    // @Param: FORMAT_VERSION
+    // @Param: FORMAT_VERSION //* 这个是在地面站显示的名称
     // @DisplayName: Eeprom format version number
     // @Description: This value is incremented when changes are made to the eeprom format
     // @User: Advanced

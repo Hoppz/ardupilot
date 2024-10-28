@@ -165,9 +165,9 @@ void AP_ToneAlarm::play_tune(const char *str)
     WITH_SEMAPHORE(_sem);
 
     _mml_player.stop();
-    strncpy(_tone_buf, str, AP_NOTIFY_TONEALARM_TONE_BUF_SIZE);
+    strncpy(_tone_buf, str, AP_NOTIFY_TONEALARM_TONE_BUF_SIZE);// 将音乐字符串复制到缓冲区
     _tone_buf[AP_NOTIFY_TONEALARM_TONE_BUF_SIZE-1] = 0;
-    _mml_player.play(_tone_buf);
+    _mml_player.play(_tone_buf); // 使用 MML 播放器播放音乐序列
 }
 
 void AP_ToneAlarm::stop_cont_tone()

@@ -35,6 +35,7 @@
    than 1 then redundant sensors may be available
  */
 #ifndef GPS_MAX_RECEIVERS
+// * 支持的 GPS 最大数量
 #define GPS_MAX_RECEIVERS 2 // maximum number of physical GPS sensors allowed - does not include virtual GPS created by blending receiver data
 #endif
 #if !defined(GPS_MAX_INSTANCES)
@@ -72,6 +73,7 @@ class RTCM3_Parser;
 
 /// @class AP_GPS
 /// GPS driver main class
+// * 具体的 GPS 驱动
 class AP_GPS
 {
     friend class AP_GPS_ERB;
@@ -140,6 +142,7 @@ public:
 
     /// GPS status codes.  These are kept aligned with MAVLink by
     /// static_assert in AP_GPS.cpp
+    //*  3D_DGPS 米级定位, FIX 表示值确定了
     enum GPS_Status {
         NO_GPS = 0,                  ///< No GPS connected/detected
         NO_FIX = 1,                  ///< Receiving valid GPS messages but no lock
@@ -183,6 +186,8 @@ public:
       The GPS_State structure is filled in by the backend driver as it
       parses each message from the GPS.
      */
+    //! GPS 对上层的接口
+    //* 所有 GPS 定位完的信息都放在这里
     struct GPS_State {
         uint8_t instance; // the instance number of this GPS
 
@@ -191,13 +196,13 @@ public:
         uint32_t time_week_ms;              ///< GPS time (milliseconds from start of GPS week)
         uint16_t time_week;                 ///< GPS week number
         Location location;                  ///< last fix location
-        float ground_speed;                 ///< ground speed in m/s
+        float ground_speed;                 ///< ground speed in m/s    //* 地速，相对于地面的速度（区别于空速，相对于空气的因子）
         float ground_course;                ///< ground course in degrees, wrapped 0-360
         float gps_yaw;                      ///< GPS derived yaw information, if available (degrees)
         uint32_t gps_yaw_time_ms;           ///< timestamp of last GPS yaw reading
         bool  gps_yaw_configured;           ///< GPS is configured to provide yaw
-        uint16_t hdop;                      ///< horizontal dilution of precision in cm
-        uint16_t vdop;                      ///< vertical dilution of precision in cm
+        uint16_t hdop;                      ///< horizontal dilution of precision in cm //* 水平精度因子（误差）
+        uint16_t vdop;                      ///< vertical dilution of precision in cm   //* 垂直精度因子
         uint8_t num_sats;                   ///< Number of visible satellites
         Vector3f velocity;                  ///< 3D velocity in m/s, in NED format
         float speed_accuracy;               ///< 3D velocity RMS accuracy estimate in m/s

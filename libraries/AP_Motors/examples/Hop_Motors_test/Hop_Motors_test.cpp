@@ -443,7 +443,7 @@ void motor_order_test()
         hal.console->printf("Motor %d\n",(int)i);
         motors->output_test_seq(i, 1050);
         hal.scheduler->delay(10);
-        motors->output_test_seq(i, 1100);
+        motors->output_test_seq(i, 1300);
         hal.scheduler->delay(1000);
         motors->output_test_seq(i, 1000);
         hal.scheduler->delay(1000);
