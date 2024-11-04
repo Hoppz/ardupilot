@@ -131,7 +131,10 @@ bool AP_Mount_Gremsy::healthy() const
 // get attitude as a quaternion.  returns true on success
 bool AP_Mount_Gremsy::get_attitude_quaternion(Quaternion& att_quat)
 {
-    att_quat = _gimbal_device_attitude_status.q;
+    att_quat = Quaternion(_gimbal_device_attitude_status.q[0], 
+                      _gimbal_device_attitude_status.q[1], 
+                      _gimbal_device_attitude_status.q[2], 
+                      _gimbal_device_attitude_status.q[3]);
     return true;
 }
 

@@ -594,9 +594,9 @@ int GCS_MAVLINK::gen_dir_entry(char *dest, size_t space, const char *path, const
 
     if (is_file) {
 #ifdef MAX_NAME_LEN
-        const uint8_t max_name_len = MIN(unsigned(MAX_NAME_LEN), 255U);
+        const uint16_t max_name_len = MIN(unsigned(MAX_NAME_LEN), 255U);
 #else
-        const uint8_t max_name_len = 255U;
+        const uint16_t max_name_len = 255U;
 #endif
         const size_t full_path_len = strlen(path) + strnlen(entry->d_name, max_name_len);
         char full_path[full_path_len + 2];

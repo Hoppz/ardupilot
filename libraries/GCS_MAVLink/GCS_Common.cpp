@@ -130,7 +130,7 @@ GCS_MAVLINK::GCS_MAVLINK(GCS_MAVLINK_Parameters &parameters,
     streamRates = parameters.streamRates;
 }
 
-bool GCS_MAVLINK::init(uint8_t instance)
+bool GCS_MAVLINK::init(uint16_t instance)
 {
     // get associated mavlink channel
     chan = (mavlink_channel_t)(MAVLINK_COMM_0 + instance);
@@ -238,12 +238,12 @@ void GCS_MAVLINK::send_mcu_status(void)
 
 #if AP_BATTERY_ENABLED
 // returns the battery remaining percentage if valid, -1 otherwise
-int8_t GCS_MAVLINK::battery_remaining_pct(const uint8_t instance) const {
+int8_t GCS_MAVLINK::battery_remaining_pct(const uint16_t instance) const {
     uint8_t percentage;
     return AP::battery().capacity_remaining_pct(percentage, instance) ? MIN(percentage, INT8_MAX) : -1;
 }
 
-void GCS_MAVLINK::send_battery_status(const uint8_t instance) const
+void GCS_MAVLINK::send_battery_status(const uint16_t instance) const
 {
     // catch the battery backend not supporting the required number of cells
     static_assert(sizeof(AP_BattMonitor::cells) >= (sizeof(uint16_t) * MAVLINK_MSG_BATTERY_STATUS_FIELD_VOLTAGES_LEN),
@@ -385,7 +385,7 @@ bool GCS_MAVLINK::send_battery_status()
 #endif  // AP_BATTERY_ENABLED
 
 #if AP_RANGEFINDER_ENABLED
-void GCS_MAVLINK::send_distance_sensor(const AP_RangeFinder_Backend *sensor, const uint8_t instance) const
+void GCS_MAVLINK::send_distance_sensor(const AP_RangeFinder_Backend *sensor, const uint16_t instance) const
 {
     if (!sensor->has_data()) {
         return;
@@ -1345,7 +1345,7 @@ bool GCS_MAVLINK_InProgress::conclude(MAV_RESULT result)
     return true;
 }
 
-GCS_MAVLINK_InProgress *GCS_MAVLINK_InProgress::get_task(MAV_CMD mav_cmd, GCS_MAVLINK_InProgress::Type t, uint8_t sysid, uint8_t compid, mavlink_channel_t chan)
+GCS_MAVLINK_InProgress *GCS_MAVLINK_InProgress::get_task(MAV_CMD mav_cmd, GCS_MAVLINK_InProgress::Type t, uint16_t sysid, uint8_t compid, mavlink_channel_t chan)
 {
     // we can't have two outstanding tasks for the same command from
     // the same mavlink node or the result is ambiguous:
@@ -2087,7 +2087,7 @@ void GCS_MAVLINK::send_raw_imu()
 #endif
 }
 
-void GCS_MAVLINK::send_scaled_imu(uint8_t instance, void (*send_fn)(mavlink_channel_t chan, uint32_t time_ms, int16_t xacc, int16_t yacc, int16_t zacc, int16_t xgyro, int16_t ygyro, int16_t zgyro, int16_t xmag, int16_t ymag, int16_t zmag, int16_t temperature))
+void GCS_MAVLINK::send_scaled_imu(uint16_t instance, void (*send_fn)(mavlink_channel_t chan, uint32_t time_ms, int16_t xacc, int16_t yacc, int16_t zacc, int16_t xgyro, int16_t ygyro, int16_t zgyro, int16_t xmag, int16_t ymag, int16_t zmag, int16_t temperature))
 {
 #if AP_INERTIALSENSOR_ENABLED
     const AP_InertialSensor &ins = AP::ins();
@@ -2136,7 +2136,7 @@ void GCS_MAVLINK::send_scaled_imu(uint8_t instance, void (*send_fn)(mavlink_chan
 // send data for barometer and airspeed sensors instances.  In the
 // case that we run out of instances of one before the other we send
 // the relevant fields as 0.
-void GCS_MAVLINK::send_scaled_pressure_instance(uint8_t instance, void (*send_fn)(mavlink_channel_t chan, uint32_t time_boot_ms, float press_abs, float press_diff, int16_t temperature, int16_t temperature_press_diff))
+void GCS_MAVLINK::send_scaled_pressure_instance(uint16_t instance, void (*send_fn)(mavlink_channel_t chan, uint32_t time_boot_ms, float press_abs, float press_diff, int16_t temperature, int16_t temperature_press_diff))
 {
     const AP_Baro &barometer = AP::baro();
 
@@ -2484,7 +2484,7 @@ void GCS::update_send()
 
 void GCS::update_receive(void)
 {
-    for (uint8_t i=0; i<num_gcs(); i++) {
+    for (uint16_t i=0; i<num_gcs(); i++) {
         chan(i)->update_receive();
     }
     // also update UART pass-thru, if enabled
@@ -2493,7 +2493,7 @@ void GCS::update_receive(void)
 
 void GCS::send_mission_item_reached_message(uint16_t mission_index)
 {
-    for (uint8_t i=0; i<num_gcs(); i++) {
+    for (uint16_t i=0; i<num_gcs(); i++) {
         chan(i)->mission_item_reached_index = mission_index;
         chan(i)->send_message(MSG_MISSION_ITEM_REACHED);
     }
@@ -5591,7 +5591,7 @@ void GCS_MAVLINK::send_gimbal_manager_status() const
 }
 #endif
 
-void GCS_MAVLINK::send_set_position_target_global_int(uint8_t target_system, uint8_t target_component, const Location& loc)
+void GCS_MAVLINK::send_set_position_target_global_int(uint16_t target_system, uint8_t target_component, const Location& loc)
 {
 
     const uint16_t type_mask = POSITION_TARGET_TYPEMASK_VX_IGNORE | POSITION_TARGET_TYPEMASK_VY_IGNORE | POSITION_TARGET_TYPEMASK_VZ_IGNORE | \

@@ -81,7 +81,7 @@ mavlink_system_t mavlink_system = {7,1};
 // routing table
 MAVLink_routing GCS_MAVLINK::routing;
 
-GCS_MAVLINK *GCS_MAVLINK::find_by_mavtype_and_compid(uint8_t mav_type, uint8_t compid, uint8_t &sysid) {
+GCS_MAVLINK *GCS_MAVLINK::find_by_mavtype_and_compid(uint8_t mav_type, uint8_t compid, uint16_t &sysid) {
     mavlink_channel_t channel;
     if (!routing.find_by_mavtype_and_compid(mav_type, compid, sysid, channel)) {
         return nullptr;
@@ -130,7 +130,7 @@ uint16_t comm_get_txspace(mavlink_channel_t chan)
 /*
   send a buffer out a MAVLink channel
  */
-void comm_send_buffer(mavlink_channel_t chan, const uint8_t *buf, uint8_t len)
+void comm_send_buffer(mavlink_channel_t chan, const uint8_t *buf, uint16_t len)
 {
     if (!valid_channel(chan) || mavlink_comm_port[chan] == nullptr || chan_discard[chan]) {
         return;

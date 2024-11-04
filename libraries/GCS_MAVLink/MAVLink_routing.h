@@ -35,26 +35,26 @@ public:
       msgid here is the mavlink message ID, pkt is a pointer to a
       mavlink message structure (e.g. a mavlink_command_long_t)
     */
-    void send_to_components(uint32_t msgid, const char *pkt, uint8_t pkt_len);
+    void send_to_components(uint32_t msgid, const char *pkt, uint16_t pkt_len);
 
     /*
       search for the first vehicle or component in the routing table with given mav_type and retrieve it's sysid, compid and channel
       returns true if a match is found
      */
-    bool find_by_mavtype(uint8_t mavtype, uint8_t &sysid, uint8_t &compid, mavlink_channel_t &channel);
+    bool find_by_mavtype(uint8_t mavtype, uint16_t &sysid, uint8_t &compid, mavlink_channel_t &channel);
 
     /*
       search for the first vehicle or component in the routing table with given mav_type and component id and retrieve its sysid and channel
       returns true if a match is found
      */
-    bool find_by_mavtype_and_compid(uint8_t mavtype, uint8_t compid, uint8_t &sysid, mavlink_channel_t &channel) const;
+    bool find_by_mavtype_and_compid(uint8_t mavtype, uint8_t compid, uint16_t &sysid, mavlink_channel_t &channel) const;
 
 private:
     // a simple linear routing table. We don't expect to have a lot of
     // routes, so a scalable structure isn't worthwhile yet.
     uint8_t num_routes;
     struct route {
-        uint8_t sysid;
+        uint16_t sysid;
         uint8_t compid;
         mavlink_channel_t channel;
         uint8_t mavtype;
@@ -72,7 +72,7 @@ private:
     // special handling for heartbeat messages
     void handle_heartbeat(GCS_MAVLINK &link, const mavlink_message_t &msg);
 
-    void send_to_components(const char *pkt, const mavlink_msg_entry_t *entry, uint8_t pkt_len);
+    void send_to_components(const char *pkt, const mavlink_msg_entry_t *entry, uint16_t pkt_len);
 
     // check for Gopro in Solo gimbal status
     bool gopro_status_check; // default is none

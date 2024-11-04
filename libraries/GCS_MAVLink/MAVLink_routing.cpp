@@ -218,7 +218,7 @@ bool MAVLink_routing::check_and_forward(GCS_MAVLINK &in_link, const mavlink_mess
 
   This is a no-op if no routes to components have been learned
 */
-void MAVLink_routing::send_to_components(uint32_t msgid, const char *pkt, uint8_t pkt_len)
+void MAVLink_routing::send_to_components(uint32_t msgid, const char *pkt, uint16_t pkt_len)
 {
     const mavlink_msg_entry_t *entry = mavlink_get_msg_entry(msgid);
     if (entry == nullptr) {
@@ -227,7 +227,7 @@ void MAVLink_routing::send_to_components(uint32_t msgid, const char *pkt, uint8_
     send_to_components(pkt, entry, pkt_len);
 }
 
-void MAVLink_routing::send_to_components(const char *pkt, const mavlink_msg_entry_t *entry, const uint8_t pkt_len)
+void MAVLink_routing::send_to_components(const char *pkt, const mavlink_msg_entry_t *entry, const uint16_t pkt_len)
 {
     bool sent_to_chan[MAVLINK_COMM_NUM_BUFFERS] {};
 
@@ -273,7 +273,7 @@ void MAVLink_routing::send_to_components(const char *pkt, const mavlink_msg_entr
   search for the first vehicle or component in the routing table with given mav_type and retrieve it's sysid, compid and channel
   returns true if a match is found
  */
-bool MAVLink_routing::find_by_mavtype(uint8_t mavtype, uint8_t &sysid, uint8_t &compid, mavlink_channel_t &channel)
+bool MAVLink_routing::find_by_mavtype(uint8_t mavtype, uint16_t &sysid, uint8_t &compid, mavlink_channel_t &channel)
 {
     // check learned routes
     for (uint8_t i=0; i<num_routes; i++) {
@@ -293,7 +293,7 @@ bool MAVLink_routing::find_by_mavtype(uint8_t mavtype, uint8_t &sysid, uint8_t &
   search for the first vehicle or component in the routing table with given mav_type and component id and retrieve its sysid and channel
   returns true if a match is found
  */
-bool MAVLink_routing::find_by_mavtype_and_compid(uint8_t mavtype, uint8_t compid, uint8_t &sysid, mavlink_channel_t &channel) const
+bool MAVLink_routing::find_by_mavtype_and_compid(uint8_t mavtype, uint8_t compid, uint16_t &sysid, mavlink_channel_t &channel) const
 {
     for (uint8_t i=0; i<num_routes; i++) {
         if ((routes[i].mavtype == mavtype) && (routes[i].compid == compid)) {

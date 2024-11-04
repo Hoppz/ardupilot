@@ -366,7 +366,7 @@ struct PACKED log_Cmd {
 struct PACKED log_MAVLink_Command {
     LOG_PACKET_HEADER;
     uint64_t time_us;
-    uint8_t target_system;
+    uint16_t target_system;
     uint8_t target_component;
     uint8_t source_system;
     uint8_t source_component;

@@ -84,7 +84,7 @@ private:
     uint16_t        request_i; // request index
 
     // waypoints
-    uint8_t         dest_sysid;  // where to send requests
+    uint16_t         dest_sysid;  // where to send requests
     uint8_t         dest_compid; // "
     uint32_t        timelast_receive_ms;
     uint32_t        timelast_request_ms;

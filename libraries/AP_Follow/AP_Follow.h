@@ -56,7 +56,7 @@ public:
     bool enabled() const { return _enabled; }
 
     // set which target to follow
-    void set_target_sysid(uint8_t sysid) { _sysid.set(sysid); }
+    void set_target_sysid(uint16_t sysid) { _sysid.set(sysid); }
 
     // restore offsets to zero if necessary, should be called when vehicle exits follow mode
     void clear_offsets_if_required();
@@ -78,7 +78,7 @@ public:
     bool get_target_dist_and_vel_ned(Vector3f &dist_ned, Vector3f &dist_with_ofs, Vector3f &vel_ned);
 
     // get target sysid
-    uint8_t get_target_sysid() const { return _sysid.get(); }
+    uint16_t get_target_sysid() const { return _sysid.get(); }
 
     // get position controller.  this controller is not used within this library but it is convenient to hold it here
     const AC_P& get_pos_p() const { return _p_pos; }

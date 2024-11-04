@@ -323,7 +323,7 @@ void GCS_MAVLINK_Copter::send_winch_status() const
 }
 #endif
 
-uint8_t GCS_MAVLINK_Copter::sysid_my_gcs() const
+uint16_t GCS_MAVLINK_Copter::sysid_my_gcs() const
 {
     return copter.g.sysid_my_gcs;
 }

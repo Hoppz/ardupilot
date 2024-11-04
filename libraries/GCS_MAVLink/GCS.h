@@ -163,13 +163,13 @@ public:
     Type task;
     MAV_CMD mav_cmd;
 
-    static class GCS_MAVLINK_InProgress *get_task(MAV_CMD cmd, Type t, uint8_t sysid, uint8_t compid, mavlink_channel_t chan);
+    static class GCS_MAVLINK_InProgress *get_task(MAV_CMD cmd, Type t, uint16_t sysid, uint8_t compid, mavlink_channel_t chan);
 
     static void check_tasks();
 
 private:
 
-    uint8_t requesting_sysid;
+    uint16_t requesting_sysid;
     uint8_t requesting_compid;
     mavlink_channel_t chan;
 
@@ -199,7 +199,7 @@ public:
 
     void        update_receive(uint32_t max_time_us=1000);
     void        update_send();
-    bool        init(uint8_t instance);
+    bool        init(uint16_t instance);
     void        send_message(enum ap_message id);
     void        send_text(MAV_SEVERITY severity, const char *fmt, ...) const FMT_PRINTF(3, 4);
     void        queued_param_send();
@@ -264,7 +264,7 @@ public:
     // accessor for uart
     AP_HAL::UARTDriver *get_uart() { return _port; }
 
-    virtual uint8_t sysid_my_gcs() const = 0;
+    virtual uint16_t sysid_my_gcs() const = 0;
     virtual bool sysid_enforce() const { return false; }
 
     // NOTE: param_name here must point to a 16+1 byte buffer - so do
@@ -335,7 +335,7 @@ public:
 #if HAL_WITH_MCU_MONITORING
     void send_mcu_status(void);
 #endif
-    void send_battery_status(const uint8_t instance) const;
+    void send_battery_status(const uint16_t instance) const;
     bool send_battery_status();
     void send_distance_sensor();
     // send_rangefinder sends only if a downward-facing instance is
@@ -352,7 +352,7 @@ public:
     void send_rc_channels_raw() const;
     void send_raw_imu();
 
-    void send_scaled_pressure_instance(uint8_t instance, void (*send_fn)(mavlink_channel_t chan, uint32_t time_boot_ms, float press_abs, float press_diff, int16_t temperature, int16_t temperature_press_diff));
+    void send_scaled_pressure_instance(uint16_t instance, void (*send_fn)(mavlink_channel_t chan, uint32_t time_boot_ms, float press_abs, float press_diff, int16_t temperature, int16_t temperature_press_diff));
     void send_scaled_pressure();
     void send_scaled_pressure2();
     virtual void send_scaled_pressure3(); // allow sub to override this
@@ -381,16 +381,16 @@ public:
     virtual void send_position_target_local_ned() { };
     void send_servo_output_raw();
     void send_accelcal_vehicle_position(uint32_t position);
-    void send_scaled_imu(uint8_t instance, void (*send_fn)(mavlink_channel_t chan, uint32_t time_ms, int16_t xacc, int16_t yacc, int16_t zacc, int16_t xgyro, int16_t ygyro, int16_t zgyro, int16_t xmag, int16_t ymag, int16_t zmag, int16_t temperature));
+    void send_scaled_imu(uint16_t instance, void (*send_fn)(mavlink_channel_t chan, uint32_t time_ms, int16_t xacc, int16_t yacc, int16_t zacc, int16_t xgyro, int16_t ygyro, int16_t zgyro, int16_t xmag, int16_t ymag, int16_t zmag, int16_t temperature));
     void send_sys_status();
-    void send_set_position_target_global_int(uint8_t target_system, uint8_t target_component, const Location& loc);
+    void send_set_position_target_global_int(uint16_t target_system, uint8_t target_component, const Location& loc);
     void send_rpm() const;
     void send_generator_status() const;
 #if AP_WINCH_ENABLED
     virtual void send_winch_status() const {};
 #endif
     void send_water_depth() const;
-    int8_t battery_remaining_pct(const uint8_t instance) const;
+    int8_t battery_remaining_pct(const uint16_t instance) const;
 
 #if HAL_HIGH_LATENCY2_ENABLED
     void send_high_latency2() const;
@@ -438,7 +438,7 @@ public:
       send a MAVLink message to all components with this vehicle's system id
       This is a no-op if no routes to components have been learned
     */
-    static void send_to_components(uint32_t msgid, const char *pkt, uint8_t pkt_len) { routing.send_to_components(msgid, pkt, pkt_len); }
+    static void send_to_components(uint32_t msgid, const char *pkt, uint16_t pkt_len) { routing.send_to_components(msgid, pkt, pkt_len); }
 
     /*
       allow forwarding of packets / heartbeats to be blocked as required by some components to reduce traffic
@@ -449,16 +449,16 @@ public:
       search for a component in the routing table with given mav_type and retrieve it's sysid, compid and channel
       returns if a matching component is found
      */
-    static bool find_by_mavtype(uint8_t mav_type, uint8_t &sysid, uint8_t &compid, mavlink_channel_t &channel) { return routing.find_by_mavtype(mav_type, sysid, compid, channel); }
+    static bool find_by_mavtype(uint8_t mav_type, uint16_t &sysid, uint8_t &compid, mavlink_channel_t &channel) { return routing.find_by_mavtype(mav_type, sysid, compid, channel); }
 
     /*
       search for the first vehicle or component in the routing table with given mav_type and component id and retrieve its sysid and channel
       returns true if a match is found
      */
-    static bool find_by_mavtype_and_compid(uint8_t mav_type, uint8_t compid, uint8_t &sysid, mavlink_channel_t &channel) { return routing.find_by_mavtype_and_compid(mav_type, compid, sysid, channel); }
+    static bool find_by_mavtype_and_compid(uint8_t mav_type, uint8_t compid, uint16_t &sysid, mavlink_channel_t &channel) { return routing.find_by_mavtype_and_compid(mav_type, compid, sysid, channel); }
     // same as above, but returns a pointer to the GCS_MAVLINK object
     // corresponding to the channel
-    static GCS_MAVLINK *find_by_mavtype_and_compid(uint8_t mav_type, uint8_t compid, uint8_t &sysid);
+    static GCS_MAVLINK *find_by_mavtype_and_compid(uint8_t mav_type, uint8_t compid, uint16_t &sysid);
 
     // update signing timestamp on GPS lock
     static void update_signing_timestamp(uint64_t timestamp_usec);
@@ -977,7 +977,7 @@ private:
         bool  burst_complete;
         uint8_t size;
         uint8_t session;
-        uint8_t sysid;
+        uint16_t sysid;
         uint8_t compid;
         uint8_t data[239];
     };
@@ -1009,7 +1009,7 @@ private:
     void ftp_worker(void);
     void ftp_push_replies(pending_ftp &reply);
 
-    void send_distance_sensor(const class AP_RangeFinder_Backend *sensor, const uint8_t instance) const;
+    void send_distance_sensor(const class AP_RangeFinder_Backend *sensor, const uint16_t instance) const;
 
     virtual bool handle_guided_request(AP_Mission::Mission_Command &cmd) = 0;
     virtual void handle_change_alt_request(AP_Mission::Mission_Command &cmd) {};
@@ -1170,7 +1170,7 @@ public:
     virtual GCS_MAVLINK *chan(const uint8_t ofs) = 0;
     virtual const GCS_MAVLINK *chan(const uint8_t ofs) const = 0;
     // return the number of valid GCS objects
-    uint8_t num_gcs() const { return _num_gcs; };
+    uint16_t num_gcs() const { return _num_gcs; };
     void send_message(enum ap_message id);
     void send_mission_item_reached_message(uint16_t mission_index);
     void send_named_float(const char *name, float value) const;
@@ -1253,7 +1253,7 @@ public:
     bool get_high_latency_status();
 #endif // HAL_HIGH_LATENCY2_ENABLED
 
-    virtual uint8_t sysid_this_mav() const = 0;
+    virtual uint16_t sysid_this_mav() const = 0;
 
 protected:
 
@@ -1266,7 +1266,7 @@ protected:
     virtual void update_vehicle_sensor_status_flags() {}
 
     GCS_MAVLINK_Parameters chan_parameters[MAVLINK_COMM_NUM_BUFFERS];
-    uint8_t _num_gcs;
+    uint16_t _num_gcs;
     GCS_MAVLINK *_chan[MAVLINK_COMM_NUM_BUFFERS];
 
 private:
