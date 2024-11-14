@@ -65,11 +65,28 @@ void Copter::failsafe_radio_on_event()
         announce_failsafe("Radio", "Continuing Auto");
         desired_action = FailsafeAction::NONE;
 
-    } else if ((flightmode->in_guided_mode()) && failsafe_option(FailsafeOption::RC_CONTINUE_IF_GUIDED)) {
+    } else if ((flightmode->in_guided_mode()) && 
+    failsafe_option(FailsafeOption::RC_CONTINUE_IF_GUIDED 
+//TODO 这里编译没通过
+//     ||
+// #if COLLMOT_EXTENSIONS_ENABLED == ENABLED
+//         collmot.allowContinueInGuidedModeWithoutGCSAndRC()
+// #else
+//         false
+// #endif
+    )) {
         // Allow guided mode to continue when FS_OPTIONS is set to continue in guided mode
+        // or if the CollMot-specific "allow continuing in guided mode even without GCS and RC" flag is set
         announce_failsafe("Radio", "Continuing Guided Mode");
         desired_action = FailsafeAction::NONE;
 
+#if MODE_DRONE_SHOW_ENABLED == ENABLED
+    } else if (flightmode->mode_number() == Mode::Number::DRONE_SHOW && failsafe_option(FailsafeOption::RC_CONTINUE_IF_GUIDED)) {
+        // Allow drone show mode to continue when FS_OPTIONS is set to continue in guided mode
+        announce_failsafe("Radio", "Continuing Show");
+        desired_action = FailsafeAction::NONE;
+
+#endif
     } else {
         announce_failsafe("Radio");
     }
@@ -447,8 +464,9 @@ void Copter::set_mode_brake_or_land_with_pause(ModeReason reason)
 }
 
 bool Copter::should_disarm_on_failsafe() {
+    // 已经处于 arm 状态，但是还在等电机发动
     if (ap.in_arming_delay) {
-        return true;
+        return true;    // 返回 true 表示需要切换到 disarm
     }
 
     switch (flightmode->mode_number()) {
@@ -459,6 +477,8 @@ bool Copter::should_disarm_on_failsafe() {
         case Mode::Number::AUTO:
         case Mode::Number::AUTO_RTL:
             // if mission has not started AND vehicle is landed, disarm motors
+            return !ap.auto_armed && ap.land_complete;
+        case Mode::Number::DRONE_SHOW:
             return !ap.auto_armed && ap.land_complete;
         default:
             // used for AltHold, Guided, Loiter, RTL, Circle, Drift, Sport, Flip, Autotune, PosHold
