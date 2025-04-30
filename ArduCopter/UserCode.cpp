@@ -39,7 +39,11 @@ void Copter::userhook_SlowLoop()
 #ifdef USERHOOK_SUPERSLOWLOOP
 void Copter::userhook_SuperSlowLoop()
 {
-    // put your 1Hz code here
+    static uint8_t count = 0;
+    if( count % 5 == 0 ) {
+        copter.g2.drone_show_manager.send_drone_show_status(MAVLINK_COMM_0);
+    }
+    count++;
 }
 #endif
 

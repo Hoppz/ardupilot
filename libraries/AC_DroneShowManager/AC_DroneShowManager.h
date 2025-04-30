@@ -5,9 +5,9 @@
 #include <AP_Math/AP_Math.h>
 #include <AP_Notify/RGBLed.h>
 #include <AP_Param/AP_Param.h>
+#include <AC_WPNav/AC_WPNav.h>
 
 #include <AC_HardFence/AC_HardFence.h>
-#include <AC_WPNav/AC_WPNav.h>
 
 // module/libskybrush
 #include <skybrush/colors.h>
@@ -34,10 +34,10 @@ enum DroneShowModeStage {
     DroneShow_Init,                 // 表演初始化
     DroneShow_WaitForStartTime,     // 等待开始时间
     DroneShow_Takeoff,              // 起飞
-    DroneShow_Performing,           // 表演
-    DroneShow_RTL,                  // 返航
-    DroneShow_Loiter,               // 悬停
-    DroneShow_Landing,              // 下降中
+    DroneShow_Performing,           // 表演         -> mode_guided
+    DroneShow_RTL,                  // 返航         -> mode_rtl
+    DroneShow_Loiter,               // 悬停         -> mode_Loiter
+    DroneShow_Landing,              // 下降中       -> mode_land
     DroneShow_Landed,               // 已着陆
     DroneShow_Error,                // 错误
 };
@@ -91,7 +91,7 @@ class AC_DroneShowManager{
 private: 
 
     /// @brief //*管理和转换坐标数据，确保飞行表演在正确的坐标系统下进行
-    class showCoordinateSystem{
+    class ShowCoordinateSystem{
     
     public: 
         // 表示展示坐标系统原点的纬度, 单位是 1e-7 度
@@ -118,15 +118,15 @@ private:
 
         // 将展示坐标系中的坐标转换为全球 GPS 坐标系中的坐标
         // 并将转换后的全球坐标存储到 loc 中
-        void convert_show_global_coordinate(sb_vector3_with_yaw_t vec, Location& loc) const;
+        void convert_show_to_global_coordinate(sb_vector3_with_yaw_t vec, Location& loc) const;
 
         // 将展示坐标系中的航向角度 (yaw) 转换为相对于正北方向的百分之一度，并进行缩放。
         // 此方法用于将展示系统中的角度转换为全球标准的角度表示。
-        void convert_show_to_global_yaw_and_scale_to_cd(float value) const;
+        float convert_show_to_global_yaw_and_scale_to_cd(float value) const;
 
         // 判断当前坐标系统是否有效。
         // 一个坐标系统被认为是有效的，当且仅当原点的纬度和经度不为零。
-        bool is_vaild() const { return origin_lat != 0 && origin_lng != 0; };
+        bool is_valid() const { return origin_lat != 0 && origin_lng != 0; };
     };
 
 public:
@@ -140,12 +140,13 @@ public:
     // 用于描述在无人机表演中当前设置的开始时间的来源
     enum StartTimeSource {
         NONE = 0,           // 没有设置开始时间
-        PARAMATER = 1,      // 开始时间通过用户设置的参数 START_TIME 进行配置
+        PARAMETER = 1,      // 开始时间通过用户设置的参数 START_TIME 进行配置
         START_METHOD = 2,   // 开始时间是通过调用 schedule_delayed_start_after() 方法设置的
         RC_SWITCH = 3       // 开始时间是通过遥控开关设置的, 在特定的遥控状态下启动无人机表演
     };
 
-    // 在表演时会被发送的 guided mode 的命令参数
+    //! 在表演时会被发送的 guided mode 的命令参数
+    //! 这个 command 用于设置下一个航点
     struct GuidedModeCommand {
         Vector3f pos;
         Vector3f vel;
@@ -164,28 +165,21 @@ public:
         }
 
     };
-    // 在启动过程中的早期阶段初始化系统，确保即使在内存有限的情况下（如Pixhawk1）
-    // 也能为接下来的操作分配足够的内存。
+    
     void early_init();
 
-    // 在飞行表演时的初始化, 读入航点信息
     void init(const AC_WPNav* wp_nav);
 
     // 返回一个布尔值，表示用户是否要求尽快取消当前的飞行表演
     // 该变量通常在 mode_drone_show.cpp 检查
-    void cancel_requested() const{ return _cancel_requested; }
+    bool cancel_requested() const{ return _cancel_requested; }
 
-    // 此函数的作用是取消预定的集体返航（Collective RTL）操作
-    // force 是即使在表演过程中，也会清除返航的操作
     bool clear_scheduled_collective_rtl(bool force = false);
 
-    // 清除预定的表演开始时间, 如果已经开始则不会取消
     bool clear_scheduled_start_time(bool force = false);
 
-    //! 配置表演的坐标系统，包括起始位置、方向和海平面高度（AMSL）
-    //! 配置整个系统的坐标原点
     bool configure_show_coordinate_system(
-        int32_t lat, int32_t lon, int32_t amsl_mm, float orientation_deg
+        int32_t lat, int32_t lng, int32_t amsl_mm, float orientation_deg
     ) WARN_IF_UNUSED;
 
     // 返回指定时间（表演开始后的秒数）时，RGB 灯光的颜色。
@@ -195,13 +189,10 @@ public:
     // 该函数用于获取控制器在表演过程中的更新频率。无人机会根据这个间隔周期性地接收新的控制命令。
     uint32_t get_controller_update_delta_msec() const { return _controller_update_delta_msec; }
 
-    // 返回当前应该发送的 guided mode 控制命令
-    // 传入一个 GuidedModeCommand 类型的引用，函数会填充这个对象，
-    // 用于指定当前应该发送的控制命令
     bool get_current_guided_mode_command_to_send(
         GuidedModeCommand& command,
-        int32_t default_yaw_cd,                             // 默认的航向
-        bool altitude_locked_above_takeoff_altitude = false // 如果为 true，则锁定飞行高度在起飞高度之上。
+        int32_t default_yaw_cd,                             
+        bool altitude_locked_above_takeoff_altitude = false
     ) WARN_IF_UNUSED;
 
     // 获取飞行器的 当前绝对位置，即在 地理坐标系 中的位置（比如经纬度、海拔）。
@@ -210,25 +201,18 @@ public:
     // 获取飞行器相对于 EKF 原点 的 相对位置，坐标采用 NED（北东上）坐标系，单位是米（m）。
     virtual bool get_current_relative_position_NED_origin(Vector3f& vec) const {return false;}
 
-    // 返回指定时间点（time）后，无人机在全球坐标系中的 期望位置（单位：厘米）。
     void get_desired_global_position_at_seconds(float time, Location& loc);
 
-    // 返回 指定时间点（time）后，无人机在 全球 NEU 坐标系 中的 期望速度，单位是厘米每秒（cm/s）。
     void get_desired_velocity_neu_in_cms_per_seconds_at_seconds(float time, Vector3f& vel);
 
-    // 返回 指定时间点（time）后，无人机在 全球 NEU 坐标系 中的 期望加速度，单位是厘米每秒平方（cm/s²）。
     void get_desired_acceleration_neu_in_cms_per_seconds_squared_at_seconds(float time, Vector3f& acc);
 
-    // 返回 指定时间点（time）后，无人机的 期望航向（Yaw），单位为 厘度（centidegrees）
     float get_desired_yaw_cd_at_seconds(float time);
 
-    // 返回 指定时间点（time）后，无人机的 期望航向变化率（Yaw Rate），单位为 厘度每秒
     float get_desired_yaw_rate_cds_at_seconds(float time);
 
-    // 返回飞行器当前位置与 期望目标位置 之间的 距离，并存储在 vec 中。
     void get_distance_from_desired_position(Vector3f& vec) const;
 
-    //! 返回 无人机起飞时的位置，即表演开始前设定的起飞坐标。
     bool get_global_takeoff_position(Location& loc) const;
 
     // 返回无人机 RGB LED 灯最后发出的颜色，并存储在 color 中
@@ -254,13 +238,10 @@ public:
     // 返回 整个表演轨迹的总时长，单位为秒
     float get_total_duration_sec() const { return _total_duration_sec; }
 
-    // 返回自表演开始以来 已过去的时间，单位为微秒
     int64_t get_elapsed_time_since_start_usec() const;
 
-    // 返回自表演开始以来 经过的时间，单位为毫秒
     int32_t get_elapsed_time_since_start_msec() const;
 
-    // 返回自表演开始以来 经过的时间，单位为秒
     float get_elapsed_time_since_start_sec() const;
 
     // 返回当前表演模式下 无人机所处的阶段
@@ -280,44 +261,32 @@ public:
         return result;
     }
 
-    // 返回 表演开始前还剩多少时间，单位为微秒
     int64_t get_time_until_start_usec() const;
 
-    //! 返回 表演开始前还剩多少时间，单位为秒
     float get_time_until_start_sec() const;
     
-    //! 返回 起飞前的剩余时间，单位为秒
     float get_time_until_takeoff_sec() const;
 
-    // 返回 着陆前的剩余时间，单位为秒
     float get_time_until_landing_sec() const;
 
     // 返回 速度前馈增益系数，用于速度控制。该系数决定了
     // 在速度控制系统中如何结合当前速度的期望值与实际值，进行控制命令的调整。
     float get_velocity_feedforward_gain() const { return _params.velocity_feedforward_gain; }
 
-    //! 处理 MAVLink 用户命令，该命令通过中央 MAVLink 处理器转发到无人机表演管理器。
     MAV_RESULT handle_command_int_packet(const mavlink_command_int_t &packet);
 
-    //! 处理 MAVLink 消息，该消息通过中央 MAVLink 处理器转发到无人机表演管理器。
     bool handle_message(const mavlink_message_t& msg) WARN_IF_UNUSED;
 
-    // 请求无人机表演管理器 尽快安排开始表演
     void handle_rc_start_switch();
 
-    // 请求无人机表演管理器 安排集体返航操作（Return To Launch，RTL），前提是表演正在进行，并且信号来自 遥控器
     void handle_rc_collective_rtl_switch();
 
-    // 是否获得了用户授权开始表演
     bool has_authorization_to_start() const;
 
-    // 返回 用户是否显式设置了表演的高度
     bool has_explicit_show_altitude_set_by_user() const;
 
-    // 返回 用户是否显式设置了表演的起始位置（原点）
     bool has_explicit_show_origin_set_by_user() const;
 
-    // 返回 用户是否显式设置了表演的朝向
     bool has_explicit_show_orientation_set_by_user() const;
 
     // 检查是否已为表演设置了 预定开始时间。
@@ -339,7 +308,6 @@ public:
         return _params.group_index == index;
     }
 
-    //! 检查无人机是否已准备好起飞。
     bool is_prepared_to_take_off() const;
 
     // 检查是否启用了加速度控制。
@@ -352,10 +320,8 @@ public:
         return _params.control_mode_flags & DroneShowControl_VelocityControlEnabled;
     }
 
-    // 检查在启动阶段是否成功加载了 表演文件 数据
     bool loaded_show_data_successfully() const;
 
-    // 检查在启动时是否成功加载了 航向控制 数据
     bool loaded_yaw_control_data_successfully() const;
 
     //! 检查无人机是否符合给定的 分组掩码。(need change)
@@ -363,58 +329,41 @@ public:
         return mask == 0 || mask & (1 << _params.group_index);
     }
 
-    // 通知表演管理器无人机表演模式已 初始化
     void notify_drone_show_mode_initialized();
 
-    // 通知表演管理器无人机表演模式已经 退出
     void notify_drone_show_mode_exited();
 
-    // 通知表演管理器无人机表演模式已 进入指定阶段
     void notify_drone_show_mode_entered_stage(DroneShowModeStage stage);
 
-    // 通知表演管理器无人机已 发送引导模式命令。
     void notify_guided_mode_command_sent(const GuidedModeCommand& command);
 
-    // 通知表演管理器无人机已经 着陆
     void notify_landed();
 
-    // 通知表演管理器无人机即将 尝试起飞
     bool notify_takeoff_attempt() WARN_IF_UNUSED;
 
 
-    // 处理 MAVLink 的 CMD_USER1 消息，根据 do_clear 参数的值，重新加载或清除表演。
     bool reload_or_clear_show(bool do_clear) WARN_IF_UNUSED;
 
-    // 请求重新从存储中加载表演文件，成功返回 true
     bool reload_show_from_storage() WARN_IF_UNUSED;
 
-    // 根据表演的时间戳调度一个集体返回起飞（RTL，Return to Launch）操作
     bool schedule_collective_rtl_at_show_timestamp_msec(uint32_t timestamp_ms);
 
-    // 调度表演的延迟开始。延迟时间由 delay_ms 参数指定，单位为毫秒
-    // 在 delay_ms 之后开始执行表演
     bool schedule_delayed_start_after(uint32_t delay_ms);
 
-    // 通过指定的 MAVLink 通道发送表演状态信息
+    
     void send_drone_show_status(const mavlink_channel_t chan) const;
 
-    // 判断无人机是否应该在开机时自动切换到表演模式，如果没有遥控器输入。
     bool should_switch_to_show_mode_at_boot() const;
 
-    // 判断当无人机获得启动授权后，是否应该切换到表演模式。
     bool should_switch_to_show_mode_when_authorized() const;
 
-    // 如果当前表演正在运行，则请求表演管理器尽快取消表演
     void stop_if_running();
 
-    // 更新无人机的 LED 状态，并执行定期任务（例如检查参数变化）
-    // 该函数需要以 50Hz 的频率调用，其中大部分子程序以 25Hz 执行
     void update();
 
     // 判断是否使用 GPS 时间来确定表演的开始时间
     bool uses_gps_time_for_show_start() const { return _params.time_sync_mode == TimeSyncMode_GPS; }
 
-    // 将与无人机表演管理器相关的日志消息写入日志
     void write_log_message() const;
 
     static const struct AP_Param::GroupInfo var_info[];
@@ -509,7 +458,7 @@ private:
     bool _sock_rgb_open;
 #endif
 
-    // 保存从存储器加载的整个显示文件的内存区域
+    // 保存从存储器 (storage) 加载的整个舞步文件
     uint8_t* _show_data;
 
     struct sb_trajectory_s* _trajectory;                // 用于存储与无人机表演相关的轨迹数据
@@ -518,7 +467,7 @@ private:
 
     struct sb_light_program_s* _light_program;
     struct sb_light_player_s* _light_player;
-    bool _light_program_valid;
+    bool _light_program_valid;                          // 表示当前的程序是一个可用的程序（非空）
 
     struct sb_yaw_control_s* _yaw_control;
     struct sb_yaw_player_s* _yaw_player;
@@ -536,12 +485,166 @@ private:
     // 这个坐标系统由用户设置，并周期性地从参数中更新。与 _show_coordinate_system 不同，
     // 它不在飞行中使用，而是在表演开始前作为暂定坐标系统使用，
     // 可能会在后期更新为实际的表演坐标系统。
+    // _check_changes_in_parameters() 会把新的坐标系复制进去
     ShowCoordinateSystem _tentative_show_coordinate_system;
 
     // 这个变量用于记录表演启动时间是由哪个来源请求设置的
     StartTimeSource _start_time_requested_by;
 
+    // 基于无人机内部时钟的表演起始时间，单位为微秒
+    // 只有当时间同步模式设置为使用基于倒计时的方法时，才使用此变量
+    uint64_t _start_time_on_internal_clock_usec;
 
+    // 表演的启动时间，以微秒为单位，采用 UNIX 时间戳。如果没有设置则为 0
+    uint64_t _start_time_unix_usec;
 
+    //! 这是表演开始时无人机的起飞位置。起飞位置是以表演坐标系统为基准的本地坐标
+    Vector3f _takeoff_position_mm;
+
+    // 这是相对于表演开始的时间（以秒为单位），定义了无人机应该开始降落的时刻。
+    float _takeoff_time_sec;
+
+    // 降落时间，相对于表演开始时的时间（秒）
+    float _landing_time_sec;
+
+    // 这是相对于表演开始的时间（以秒为单位），指定了无人机应该开始执行 RTL 的时刻。
+    // 如果未安排此轨迹，则值为零
+    float _crtl_start_time_sec;
+
+    struct {
+        uint32_t started_at_msec;       // 灯光信号的开始时间，单位为毫秒
+        uint16_t duration_msec;         // 灯光信号的持续时间，单位为毫秒
+        uint8_t color[3];               // 灯光信号的颜色，采用 RGB 形式存储
+        LightEffectType effect;         // 灯光效果的类型，表示灯光信号的动态效果，例如闪烁、呼吸灯 
+        LightEffectPriority priority;   // 灯光信号的优先级
+        uint16_t period_msec;           // 灯光信号的周期，单位为毫秒。适用于需要周期性变化的灯光效果，比如闪烁或脉冲
+        uint16_t phase_msec;            // 灯光信号的相位，单位为毫秒。与周期相关，控制灯光效果的开始时刻。
+        bool enhance_brightness;        // 是否通过使用白色 LED 来增强亮度
+        bool sync_to_gps;              // 是否将灯光信号与 GPS 时间同步
+    } _light_signal;
+
+    // 当前的表演模式阶段
+    DroneShowModeStage _stage_in_drone_show_mode;
+
+    // 整个表演的总持续时间，单位为秒
+    float _total_duration_sec;
+
+    // 一个标志位，用于指示是否已经请求取消当前的表演
+    // 这个值会被 mode_drone_show.cpp 定期检查
+    bool _cancel_requested;
+
+    //  表示执行飞行表演时，连续发出引导模式（Guided Mode）命令之间的首选时间间隔，单位为毫秒
+    uint32_t _controller_update_delta_msec;
+
+    // 是一个工厂对象，它负责创建 RGB LED 实例，供无人机表演管理器控制
+    DroneShowLEDFactory* _rgb_led_factory;
+
+    // 这个 LED 控制对象负责管理和执行具体的灯光指令，如颜色变化、闪烁效果等
+    DroneShowLED* _rgb_led;
+
+    // 存储最近一次发送到 RGB LED 的颜色
+    sb_rgb_color_t _last_rgb_led_color;
+
+    // 保存最近一次发送的引导模式命令
+    GuidedModeCommand _last_setpoint;
+
+    // 表示遥控器（RC）启动开关被阻塞的时间，单位为毫秒。
+    // 如果该时间戳存在，说明遥控器的启动开关在此时间之前不能激活
+    uint32_t _rc_switches_blocked_until;
+
+    // 是无人机启动时 STAT_BOOTCNT 参数的副本，表示启动次数。
+    //! 系统会定期将这个值的低两位发送在状态数据包中，
+    //! 供地面控制站（GCS）检测无人机的重启情况。
+    uint16_t _boot_count;
+
+    // 指向航点导航模块（AC_WPNav）的引用。通过该引用，表演管理器可以查询起飞相关的导航参数
+    const AC_WPNav* _wp_nav;
+
+    bool _are_rc_switches_blocked();
+
+    void _check_changes_in_parameters();
+
+    void _check_events();
+
+    void _check_radio_failsafe();
+
+    void _clear_start_time_after_landing();
+
+    void _clear_start_time_if_set_by_switch();
+
+    bool _copy_show_coordinate_system_from_parameters_to(
+        ShowCoordinateSystem& coordinate_system
+    ) const;
+
+    // 在操作失败后触发灯光信号
+    void _flash_leds_after_failure();
+
+    // 在操作成功后触发灯光信号
+    void _flash_leds_after_success();
+
+    // 来触发一个灯光信号，目的是吸引注意力，通常由地面控制站（GCS）操作员触发
+    void _flash_leds_to_attract_attention(LightEffectPriority priority);
+    
+    //! 控制无人机的 LED 灯闪烁，使用指定的颜色（通过 RGB 值）和指定的闪烁次数（count）。
+    // priority 参数表示闪烁信号的优先级，而 enhance_brightness（默认值为 false）
+    // 用于决定是否通过使用额外的白色 LED 来增强亮度
+    void _flash_leds_with_color(
+        uint8_t red, uint8_t green, uint8_t blue, uint8_t count,
+        LightEffectPriority priority, bool enhance_brightness = false
+    );
+
+    // 回一个用于实现灯光信号的时间戳。
+    // 当无人机有稳定的 GPS 信号时，该时间戳会与 GPS 秒同步
+    uint32_t _get_gps_synced_timestamp_in_millis_for_lights() const;
+
+    bool _handle_custom_data_message(uint8_t type, void* data, uint8_t length);
+
+    bool _handle_data16_message(const mavlink_message_t& msg);
+
+    bool _handle_data32_message(const mavlink_message_t& msg);
+    
+    bool _handle_data64_message(const mavlink_message_t& msg);
+
+    bool _handle_data96_message(const mavlink_message_t& msg);
+
+    // 处理来自地面站的 LED_CONTROL 类型的 MAVLink 消息
+    bool _handle_led_control_message(const mavlink_message_t& msg);
+
+    bool _is_at_expected_position() const;
+
+    bool _is_at_takeoff_position() const;
+
+    bool _is_close_to_position(const Location& target_loc, float xy_threshold, float z_threshold) const;
+
+    bool _is_gps_time_ok() const;
+
+    void _recalculate_trajectory_properties();
+
+    // 用于请求无人机切换到无人机表演模式
+    virtual void _request_switch_to_show_mode() {};
+
+    bool _load_show_file_from_storage();
+    void _set_light_program_and_take_ownership(struct sb_light_program_s *value);
+    void _set_trajectory_and_take_ownership(struct sb_trajectory_s *value);
+    void _set_show_data_and_take_ownership(uint8_t *value);
+    void _set_yaw_control_and_take_ownership(struct sb_yaw_control_s *value);
+
+    // 更新无人机上的 LED 灯状态。确保 LED 灯的显示与无人机当前的状态一致。
+    // 必须 定期 调用，调用频率为 25 Hz，即每秒更新 25 次。
+    void _update_lights();
+
+    
+    void _update_preflight_check_result(bool force = 0);
+
+    // 更新无人机控制的 RGB LED 实例。更新是基于当前舵机或控制参数来改变 LED 配置
+    // 这个函数不直接控制 LED 的状态，而是更新配置，以便与其他系统同
+    void _update_rgb_led_instance();
+
+    // 重复上一次发送的 RGB LED 控制命令。当控制信道不稳定时，用来保证 LED 状态的一致性
+    void _repeat_last_rgb_led_command();
+
+#if CONFIG_HAL_BOARD == HAL_BOARD_SITL
+    bool _open_rgb_led_socket();
+#endif
 
 };  

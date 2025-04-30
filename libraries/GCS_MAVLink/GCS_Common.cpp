@@ -6430,7 +6430,15 @@ void GCS_MAVLINK::initialise_message_intervals_from_streamrates()
     }
 #if HAL_HIGH_LATENCY2_ENABLED
     if (!is_high_latency_link) {
+        
         set_mavlink_message_id_interval(MAVLINK_MSG_ID_HEARTBEAT, 1000);
+        gcs().send_text(MAV_SEVERITY_DEBUG,"init msg by hoppz");
+        // hoppz add
+        // set_mavlink_message_id_interval(MAVLINK_MSG_ID_ATTITUDE, 1000);
+        // set_mavlink_message_id_interval(MAVLINK_MSG_ID_BATTERY_STATUS , 1000);
+        // set_mavlink_message_id_interval(MAVLINK_MSG_ID_SYS_STATUS  , 1000);
+        // hoppz add
+
     } else {
         set_mavlink_message_id_interval(MAVLINK_MSG_ID_HIGH_LATENCY2, 5000);
     }

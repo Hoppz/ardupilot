@@ -69,6 +69,7 @@ failed:
 }
 
 void GCS_MAVLINK::handle_file_transfer_protocol(const mavlink_message_t &msg) {
+
     if (ftp_init()) {
         mavlink_file_transfer_protocol_t packet;
         mavlink_msg_file_transfer_protocol_decode(&msg, &packet);
@@ -117,6 +118,7 @@ bool GCS_MAVLINK::send_ftp_reply(const pending_ftp &reply)
     payload[6] = reply.burst_complete ? 1 : 0;
     put_le32_ptr(&payload[8], reply.offset);
     memcpy(&payload[12], reply.data, sizeof(reply.data));
+
     mavlink_msg_file_transfer_protocol_send(
         reply.chan,
         0, reply.sysid, reply.compid,

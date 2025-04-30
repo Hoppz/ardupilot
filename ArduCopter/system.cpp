@@ -183,6 +183,11 @@ void Copter::init_ardupilot()
     g2.smart_rtl.init();
 #endif
 
+#if MODE_DRONE_SHOW_ENABLED == ENABLED
+	// early initialization steps of drone show subsystem
+    g2.drone_show_manager.early_init();
+#endif
+
 #if HAL_LOGGING_ENABLED
     // initialise AP_Logger library
     logger.setVehicle_Startup_Writer(FUNCTOR_BIND(&copter, &Copter::Log_Write_Vehicle_Startup_Messages, void));
@@ -209,8 +214,24 @@ void Copter::init_ardupilot()
 
     motors->output_min();  // output lowest possible value to motors
 
+#if MODE_DRONE_SHOW_ENABLED == ENABLED
+    // 初始化子系统
+    g2.drone_show_manager.init(wp_nav);
+
+    // 初始化 hard fence 
+    g2.drone_show_manager.hard_fence.init();
+#endif
+
+    // 是否要开机切换到 mode_drone_show
+    enum Mode::Number initial_mode = (enum Mode::Number)g.initial_mode.get();
+#if MODE_DRONE_SHOW_ENABLED == ENABLED
+    if( g2.drone_show_manager.should_switch_to_show_mode_at_boot() ){
+        initial_mode = Mode::Number::DRONE_SHOW;
+    }
+#endif
+
     // attempt to set the initial_mode, else set to STABILIZE
-    if (!set_mode((enum Mode::Number)g.initial_mode.get(), ModeReason::INITIALISED)) {
+    if (!set_mode(initial_mode, ModeReason::INITIALISED)) {
         // set mode to STABILIZE will trigger mode change notification to pilot
         set_mode(Mode::Number::STABILIZE, ModeReason::UNAVAILABLE);
     }

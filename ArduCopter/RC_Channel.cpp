@@ -80,6 +80,8 @@ void RC_Channel_Copter::init_aux_function(const aux_func_t ch_option, const AuxS
     case AUX_FUNC::BRAKE:
     case AUX_FUNC::CIRCLE:
     case AUX_FUNC::DRIFT:
+    case AUX_FUNC::DRONE_SHOW_START:
+    case AUX_FUNC::DRONE_SHOW_CRTL:
     case AUX_FUNC::FLIP:
     case AUX_FUNC::FLOWHOLD:
     case AUX_FUNC::FOLLOW:
