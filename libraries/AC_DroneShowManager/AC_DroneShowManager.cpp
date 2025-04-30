@@ -1517,7 +1517,6 @@ void AC_DroneShowManager::_check_changes_in_parameters()
         !is_zero(_params.orientation_deg - last_seen_orientation_deg)
     );
     // 表演开始的时间是否变化
-
     bool new_start_time_pending = _params.start_time_gps_sec != last_seen_start_time_gps_sec;
     // 授权的状态是否变化
     bool new_show_authorization_pending = _params.authorized_to_start != last_seen_show_authorization_state;

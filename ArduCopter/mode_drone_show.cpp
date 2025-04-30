@@ -689,8 +689,6 @@ bool ModeDroneShow::takeoff_completed() const
              * Yes, this is an ugly hack, but there is no way to start the
              * loiter mode while also specifying a target altitude to loiter at
              */
-
-
             return wp_nav->reached_wp_destination() && takeoff_timed_out();
         }
     } else if (_stage >= DroneShow_Performing && _stage <= DroneShow_Landed) {
@@ -704,8 +702,6 @@ bool ModeDroneShow::takeoff_completed() const
 bool ModeDroneShow::takeoff_timed_out() const
 {
     if (_stage == DroneShow_Takeoff) {
-        if(get_elapsed_time_since_last_stage_change_msec() > 10000){
-        }
         return get_elapsed_time_since_last_stage_change_msec() > 10000;
     } else {
         return false;
