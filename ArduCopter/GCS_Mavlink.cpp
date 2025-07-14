@@ -549,6 +549,23 @@ static const ap_message STREAM_EXTRA1_msgs[] = {
 static const ap_message STREAM_EXTRA2_msgs[] = {
     MSG_VFR_HUD
 };
+
+// /// hoppz add
+// static const ap_message STREAM_EXTRA3_msgs[] {
+//     MSG_SYS_STATUS,
+// #if AP_BATTERY_ENABLED
+//     MSG_BATTERY_STATUS,
+// #endif
+//     MSG_GPS_RAW,
+//     MSG_ATTITUDE,        // 只需要 LOCATION 里面的 heading 就可以了
+//     MSG_LOCATION,
+// #if COMPASS_CAL_ENABLED
+//     MSG_MAG_CAL_REPORT,
+//     MSG_MAG_CAL_PROGRESS,
+// #endif
+// };
+// /// hoppz add
+
 static const ap_message STREAM_EXTRA3_msgs[] = {
     MSG_AHRS,
     MSG_SYSTEM_TIME,

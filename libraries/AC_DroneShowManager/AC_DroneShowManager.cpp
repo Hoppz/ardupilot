@@ -456,6 +456,7 @@ void AC_DroneShowManager::init(const AC_WPNav* wp_nav)
 #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
     _open_rgb_led_socket();
 #endif
+    //! 初始化 LED 
     _update_rgb_led_instance();
 }
 
@@ -488,6 +489,7 @@ bool AC_DroneShowManager::_load_show_file_from_storage()
     retval = AP::FS().stat(SHOW_FILE, &stat_data);
     if( retval ){
         // 不存在, 不需要加载
+        gcs().send_text(MAV_SEVERITY_ERROR, "[Droneshow][load show file] not find !");
         return true;
     }
 
@@ -501,6 +503,8 @@ bool AC_DroneShowManager::_load_show_file_from_storage()
     if(show_data == 0){         // 文件太大了
         hal.console->printf(
             "Show file too large: %ld bytes\n",
+            static_cast<long int>(stat_data.st_size));
+            gcs().send_text(MAV_SEVERITY_ERROR, "[Droneshow][load show file] Show file too large: %ld bytes\n",
             static_cast<long int>(stat_data.st_size));
         return false;
     }
@@ -534,6 +538,8 @@ bool AC_DroneShowManager::_load_show_file_from_storage()
                 static_cast<long int>(write_ptr - show_data),
                 static_cast<int>(errno)
             );
+            gcs().send_text(MAV_SEVERITY_ERROR, "[Droneshow][load show file] IO error while reading show file near byte %ld, errno = %d",
+                static_cast<long int>(write_ptr - show_data),static_cast<int>(errno));
             free(show_data);
             show_data = 0;
             break;
@@ -562,6 +568,7 @@ bool AC_DroneShowManager::_load_show_file_from_storage()
         retval = sb_trajectory_init_from_binary_file_in_memory(&loaded_trajectory, show_data, stat_data.st_size);
         if( retval ){
             hal.console->printf("Error while parsing show file: %d\n", (int) retval);
+            gcs().send_text(MAV_SEVERITY_ERROR, "[Droneshow][trajectory_init] Error while parsing show file: %d", (int) retval);
         } else {
             _set_trajectory_and_take_ownership(&loaded_trajectory);
 
@@ -572,9 +579,12 @@ bool AC_DroneShowManager::_load_show_file_from_storage()
                     _total_duration_sec, _takeoff_time_sec, _landing_time_sec
                 );
                 //TODO ？ 这里只确定了 trajectory 怎么就直接 success 了不等全部都验证了再 success ?
+                gcs().send_text(MAV_SEVERITY_NOTICE, "[Droneshow][load show file] Loaded show: %.1fs, takeoff at %.1fs, landing at %.1fs",
+                    _total_duration_sec, _takeoff_time_sec, _landing_time_sec);
                 success = true;
             } else {
                 hal.console->printf("Takeoff or landing time is invalid!\n");
+                gcs().send_text(MAV_SEVERITY_ERROR, "[Droneshow][load show file] Takeoff or landing time is invalid!");
             }
         }
 
@@ -588,6 +598,7 @@ bool AC_DroneShowManager::_load_show_file_from_storage()
 
         if( retval ){
             hal.console->printf("Error while loading light program: %d\n", (int) retval);
+            gcs().send_text(MAV_SEVERITY_ERROR, "[Droneshow][load show file] light_program_init: %d", (int) retval);
         } else {
             _set_light_program_and_take_ownership(&loaded_light_program);
         }
@@ -603,6 +614,7 @@ bool AC_DroneShowManager::_load_show_file_from_storage()
         else if (retval)
         {
             hal.console->printf("Error while parsing show file: %d\n", (int) retval);
+            gcs().send_text(MAV_SEVERITY_ERROR, "[Droneshow][control_init] Error while parsing show file: %d", (int) retval);
         }
         else
         {
@@ -610,7 +622,6 @@ bool AC_DroneShowManager::_load_show_file_from_storage()
         }
     }
 
-    gcs().send_text(MAV_SEVERITY_NOTICE, "[Droneshow] success read show file");
     // don't matter, no one care about this 
     return success;
 }
@@ -1083,21 +1094,26 @@ float AC_DroneShowManager::get_time_until_landing_sec() const
 // 在 `ArduCopter/GCS_Mavlink.cpp`  GCS_MAVLINK_Copter::handle_command_int_packet 中调用
 MAV_RESULT AC_DroneShowManager::handle_command_int_packet(const mavlink_command_int_t &packet)
 {
+    gcs().send_text(MAV_SEVERITY_NOTICE,"[DroneShow] get Command");
     switch (packet.command){
         case MAV_CMD_USER_1: { // 重新加载，或清除表演
             // parma1: 命令类型
             if( is_zero(packet.param1)) {   // param1 == 0
                 // 重新加载当前的表演
                 if(reload_or_clear_show(/* do_clear = */0)){
+                    gcs().send_text(MAV_SEVERITY_NOTICE,"[DroneShow] reload show success");
                     return MAV_RESULT_ACCEPTED;
                 } else {
+                    gcs().send_text(MAV_SEVERITY_ERROR,"[DroneShow] reload show failed");
                     return MAV_RESULT_FAILED;
                 }
             } else if( is_zero(packet.param1 - 1)) { // parma1 == 1
                 // 清除当前的表演
                 if(reload_or_clear_show(/* do_clear = */1)){
+                    gcs().send_text(MAV_SEVERITY_NOTICE,"[DroneShow] remove show success");
                     return MAV_RESULT_ACCEPTED;
                 } else {
+                    gcs().send_text(MAV_SEVERITY_ERROR,"[DroneShow] remove show failed");
                     return MAV_RESULT_FAILED;
                 }
             }
@@ -1118,8 +1134,10 @@ MAV_RESULT AC_DroneShowManager::handle_command_int_packet(const mavlink_command_
                     packet.param4
                 )){
                     return MAV_RESULT_ACCEPTED;
+                    gcs().send_text(MAV_SEVERITY_NOTICE,"[DroneShow] set orign success");
                 } else {
                     return MAV_RESULT_FAILED;
+                    gcs().send_text(MAV_SEVERITY_ERROR,"[DroneShow] set orign failed");
                 }
             }
 
@@ -1314,6 +1332,10 @@ void AC_DroneShowManager::send_drone_show_status(const mavlink_channel_t chan) c
     //TODO: 可能有问题
     /* make sure that we can make use of MAVLink packet truncation */
     memset(packet, 0, sizeof(uint8_t));
+
+    //Hoppz test
+    // gcs().send_text(MAV_SEVERITY_CRITICAL,"[Test] [time_week] type:(%d)",AP::gps().time_week());
+    //Hoppz test
 
     // 计算第一个标志位
     flags = 0;
@@ -1817,15 +1839,17 @@ bool AC_DroneShowManager::_is_at_takeoff_position() const
     if (!_tentative_show_coordinate_system.is_valid())
     {
         // User did not set up the takeoff position yet
+        // gcs().send_text(MAV_SEVERITY_WARNING, "[takeoff_position] User did not set up the takeoff position yet");
         return false;
     }
 
     if (!get_global_takeoff_position(takeoff_loc))
     {
         // Show coordinate system not set up yet
+        // gcs().send_text(MAV_SEVERITY_WARNING, "[takeoff_position] Show coordinate system not set up yet");
         return false;
     }
-
+    
     return _is_close_to_position(takeoff_loc, _params.max_xy_placement_error_m, 0);
 }
 
@@ -1963,7 +1987,8 @@ void AC_DroneShowManager::_update_preflight_check_result(bool force)
     ) {
         _preflight_check_failures |= DroneShowPreflightCheck_ShowNotConfiguredYet;
     }
-
+    
+    // gcs().send_text(MAV_SEVERITY_WARNING, "[preflight] tentative: (%d), postion: (%d)",_tentative_show_coordinate_system.is_valid(),_is_at_takeoff_position());
     if (_tentative_show_coordinate_system.is_valid() && !_is_at_takeoff_position()) {
         _preflight_check_failures |= DroneShowPreflightCheck_NotAtTakeoffPosition;
     }

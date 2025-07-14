@@ -39,11 +39,11 @@ void Copter::userhook_SlowLoop()
 #ifdef USERHOOK_SUPERSLOWLOOP
 void Copter::userhook_SuperSlowLoop()
 {
-    static uint8_t count = 0;
-    if( count % 5 == 0 ) {
-        copter.g2.drone_show_manager.send_drone_show_status(MAVLINK_COMM_0);
-    }
-    count++;
+    // 每秒都发送一次
+    // gcs().send_text(MAV_SEVERITY_NOTICE, "[Droneshow] send_drone_show_status");
+    // copter.g2.drone_show_manager.send_drone_show_status(MAVLINK_COMM_0);
+    // MAVLINK_COMM_0 是 usb 口, wifi 无法发出
+    copter.g2.drone_show_manager.send_drone_show_status(MAVLINK_COMM_1);
 }
 #endif
 

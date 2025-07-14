@@ -125,9 +125,13 @@ bool AC_DroneShowManager::_handle_led_control_message(const mavlink_message_t& m
     
     // Individual messages take precedence over broadcast messages so we need to
     // know whether this message is broadcast
-    priority = (packet.target_system == 0)
-        ? LightEffectPriority_Broadcast
-        : LightEffectPriority_Individual;
+    //hoppz add
+    //! 下面注释是原有的, 在测试阶段先注释掉
+    // priority = (packet.target_system == 0)
+    //     ? LightEffectPriority_Broadcast
+    //     : LightEffectPriority_Individual;
+    priority = LightEffectPriority_Internal;
+    
     if (priority < _light_signal.priority) {
         // Previous light signal has a higher priority, but maybe it ended already?
         if (_light_signal.started_at_msec + _light_signal.duration_msec < AP_HAL::millis()) {
@@ -147,6 +151,8 @@ bool AC_DroneShowManager::_handle_led_control_message(const mavlink_message_t& m
     // flash at the same time. However, when this is an individual command,
     // start the flash as soon as possible for responsiveness.
     _light_signal.sync_to_gps = (packet.target_system == 0);
+
+    // gcs().send_text(MAV_SEVERITY_NOTICE,"led packet.custom_len: %d",packet.custom_len);
 
     if (packet.custom_len < 2) {
         // Start blinking the drone show LED
@@ -209,7 +215,7 @@ bool AC_DroneShowManager::_handle_led_control_message(const mavlink_message_t& m
             }
         }
     }
-
+    // gcs().send_text(MAV_SEVERITY_NOTICE,"r: %d, g: %d, b: %d",_light_signal.color[0],_light_signal.color[1],_light_signal.color[2]);
     // Handle zero duration; it means that we need to turn off whatever
     // effect we have now.
     if (matches_group_mask(mask) && _light_signal.duration_msec == 0) {
@@ -495,7 +501,17 @@ void AC_DroneShowManager::_update_lights()
         color.blue >>= shift;
     }
 
+    // if( _last_rgb_led_color.red != color.red        ||
+    //     _last_rgb_led_color.green != color.green    ||
+    //     _last_rgb_led_color.blue != color.blue
+    // ) {
+    //     gcs().send_text(MAV_SEVERITY_NOTICE, "r: %d, g: %d, b: %d",color.red,color.green, color.blue);
+    // }
     _last_rgb_led_color = color;
+
+    // static cnt = 0;
+
+    
 
     if (_rgb_led) {
         // No need to test whether the RGB values or the gamma correction
@@ -555,6 +571,8 @@ void AC_DroneShowManager::_update_rgb_led_instance()
         int led_type = _params.led_specs[0].type;
         uint8_t channel = _params.led_specs[0].channel;
         uint8_t num_leds = _params.led_specs[0].count;
+
+        gcs().send_text(MAV_SEVERITY_NOTICE, "type:%d, channel:%d, num:%d",led_type,channel,num_leds);
 
         if (
             led_type != previous_led_type ||

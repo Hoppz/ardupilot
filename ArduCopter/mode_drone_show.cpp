@@ -420,7 +420,7 @@ void ModeDroneShow::initialization_run()
     // 确定是否在空中
     if( is_disarmed_or_landed() ){
         // 不在空中的话就切换到 wait for start time 模式
-        wait_for_start_time_run(); 
+        wait_for_start_time_start(); 
     } else {
         // 在空中的话就进入 loiter 模式，因为我们不知道 表演的时钟
         loiter_run();

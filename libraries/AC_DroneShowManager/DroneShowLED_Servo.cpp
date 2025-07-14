@@ -1,6 +1,6 @@
 #include <AP_HAL/AP_HAL.h>
 #include <SRV_Channel/SRV_Channel.h>
-
+#include <GCS_MAVLink/GCS.h>
 #include "DroneShowLED_Servo.h"
 
 extern const AP_HAL::HAL& hal;
@@ -14,6 +14,7 @@ DroneShowLED_Servo::DroneShowLED_Servo(
     _red_channel(red_channel), _green_channel(green_channel),
     _blue_channel(blue_channel), _white_channel(white_channel),
     _inverted(inverted) {
+        gcs().send_text(MAV_SEVERITY_NOTICE, "new Led server");
 }
 
 bool DroneShowLED_Servo::init()

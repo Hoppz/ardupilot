@@ -61,10 +61,10 @@ enum DroneShowPreflightCheckFlag {
 
 //* 地面站控制灯光的枚举类
 enum LightEffectType {
-    LightEffect_Off,                            // 灯光关闭
-    LightEffect_Solid,                          // 灯光常亮
-    LightEffect_Blinking,                       // 闪烁
-    LightEffect_Breathing,                      // 呼吸灯
+    LightEffect_Off,                            // 灯光关闭 0
+    LightEffect_Solid,                          // 灯光常亮 1
+    LightEffect_Blinking,                       // 闪烁     2
+    LightEffect_Breathing,                      // 呼吸灯   3
     LightEffect_Last = LightEffect_Breathing
 };
 

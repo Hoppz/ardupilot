@@ -263,6 +263,7 @@ void GCS_MAVLINK::handle_param_request_read(const mavlink_message_t &msg)
 void GCS_MAVLINK::handle_param_set(const mavlink_message_t &msg)
 {
     mavlink_param_set_t packet;
+
     mavlink_msg_param_set_decode(&msg, &packet);
     enum ap_var_type var_type;
 

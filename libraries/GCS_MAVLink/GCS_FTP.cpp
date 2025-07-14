@@ -90,9 +90,16 @@ void GCS_MAVLINK::handle_file_transfer_protocol(const mavlink_message_t &msg) {
         memcpy(request.data, &packet.payload[12], sizeof(packet.payload) - 12);
 
         if (!ftp.requests->push(request)) {
+            //hoppz
+            gcs().send_text(MAV_SEVERITY_WARNING, "no buffer space to queue ftp data");
+            //hoppz
             // dropping the message, no buffer space to queue it in
             // we could NACK it, but that can lead to GCS confusion, so we're treating it like lost data
         }
+    } else {
+        // hoppz
+        gcs().send_text(MAV_SEVERITY_INFO, "ftp not init");
+        // hoppz
     }
 }
 
@@ -217,6 +224,11 @@ void GCS_MAVLINK::ftp_worker(void) {
                 // if a new session appears and the old session has
                 // been idle for more than the timeout then force
                 // close the old session
+                
+                // hoppz
+                gcs().send_text(MAV_SEVERITY_WARNING, "ftp session timeout, close ftp");
+                // hoppz
+
                 AP::FS().close(ftp.fd);
                 ftp.fd = -1;
                 ftp.current_session = -1;
@@ -249,6 +261,9 @@ void GCS_MAVLINK::ftp_worker(void) {
                             AP::FS().close(ftp.fd);
                             ftp.fd = -1;
                             ftp.current_session = -1;
+                            // hoppz
+                            gcs().send_text(MAV_SEVERITY_WARNING, "ftp session timeout, close ftp");
+                            // hoppz
                         }
                         if (ftp.fd != -1) {
                             ftp_error(reply, FTP_ERROR::Fail);
@@ -338,6 +353,9 @@ void GCS_MAVLINK::ftp_worker(void) {
                         // only allow one file to be open per session
                         if (ftp.fd != -1) {
                             ftp_error(reply, FTP_ERROR::Fail);
+                            // hoppz
+                            gcs().send_text(MAV_SEVERITY_ERROR,"only allow one file to be open");
+                            // hoppz
                             break;
                         }
 
@@ -354,6 +372,11 @@ void GCS_MAVLINK::ftp_worker(void) {
                         ftp.fd = AP::FS().open((char *)request.data,
                                                (request.opcode == FTP_OP::CreateFile) ? O_WRONLY|O_CREAT|O_TRUNC : O_WRONLY);
                         if (ftp.fd == -1) {
+                            
+                            // hoppz
+                            gcs().send_text(MAV_SEVERITY_ERROR,"can not open file");
+                            // hoppz
+
                             ftp_error(reply, FTP_ERROR::FailErrno);
                             break;
                         }

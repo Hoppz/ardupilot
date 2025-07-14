@@ -2199,6 +2199,7 @@ void AP_Param::set_float(float value, enum ap_var_type var_type)
         if (value < 0) rounding_addition = -rounding_addition;
         float v = value+rounding_addition;
         v = constrain_float(v, INT16_MIN, INT16_MAX);
+
         ((AP_Int16 *)this)->set(v);
     } else if (var_type == AP_PARAM_INT8) {
         if (value < 0) rounding_addition = -rounding_addition;
@@ -2207,7 +2208,6 @@ void AP_Param::set_float(float value, enum ap_var_type var_type)
         ((AP_Int8 *)this)->set(v);
     }
 }
-
 
 /*
   parse a parameter file line

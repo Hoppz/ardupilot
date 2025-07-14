@@ -105,6 +105,7 @@ bool MAVLink_routing::check_and_forward(GCS_MAVLINK &in_link, const mavlink_mess
 
     // handle the case of loopback of our own messages, due to
     // incorrect serial configuration.
+    
     if (msg.sysid == mavlink_system.sysid &&
         msg.compid == mavlink_system.compid) {
         return false;
@@ -139,7 +140,8 @@ bool MAVLink_routing::check_and_forward(GCS_MAVLINK &in_link, const mavlink_mess
     int16_t target_system = -1;
     int16_t target_component = -1;
     get_targets(msg, target_system, target_component);
-
+    // gcs().send_text(MAV_SEVERITY_DEBUG, "forward target_sys: %d",target_system);
+    // gcs().send_text(MAV_SEVERITY_DEBUG, "forward mavlink_system: %d", mavlink_system.sysid );
     bool broadcast_system = (target_system == 0 || target_system == -1);
     bool broadcast_component = (target_component == 0 || target_component == -1);
     bool match_system = broadcast_system || (target_system == mavlink_system.sysid);
@@ -150,6 +152,11 @@ bool MAVLink_routing::check_and_forward(GCS_MAVLINK &in_link, const mavlink_mess
     // don't ever forward data from a private channel
     // unless a Gopro camera is connected to a Solo gimbal
     bool should_process_locally = from_private_channel;
+
+    // gcs().send_text(MAV_SEVERITY_DEBUG, "forward match_system: %d",match_system);
+    // gcs().send_text(MAV_SEVERITY_DEBUG, "forward match_component: %d",match_component);
+    // gcs().send_text(MAV_SEVERITY_DEBUG, "forward should_process_locally: %d",should_process_locally);
+
 #if HAL_SOLO_GIMBAL_ENABLED
     if (gopro_status_check) {
         should_process_locally = false;
@@ -418,7 +425,10 @@ void MAVLink_routing::get_targets(const mavlink_message_t &msg, int16_t &sysid, 
         return;
     }
     if (msg_entry->flags & MAV_MSG_ENTRY_FLAG_HAVE_TARGET_SYSTEM) {
-        sysid = _MAV_RETURN_uint8_t(&msg,  msg_entry->target_system_ofs);
+        // hoppz modify: adjust our uin16_t sysId (only used as int16_t )  target_system 
+        // sysid = _MAV_RETURN_uint8_t(&msg,  msg_entry->target_system_ofs);
+        sysid = hop_mav_return_int16_t(&msg, msg_entry->target_system_ofs);
+        // gcs().send_text(MAV_SEVERITY_DEBUG,"te_sysid: %d",te_sysid);
     }
     if (msg_entry->flags & MAV_MSG_ENTRY_FLAG_HAVE_TARGET_COMPONENT) {
         compid = _MAV_RETURN_uint8_t(&msg,  msg_entry->target_component_ofs);
