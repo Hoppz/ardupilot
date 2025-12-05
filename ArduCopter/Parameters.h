@@ -713,9 +713,6 @@ public:
 
 #if MODE_DYNAMIC_RTL == ENABLE
     AP_Float ze_star_alt_cm;
-    AP_Float home_pos_x_cm;
-    AP_Float home_pos_y_cm;
-    AP_Float home_pos_z_cm;
 #endif
 };
 

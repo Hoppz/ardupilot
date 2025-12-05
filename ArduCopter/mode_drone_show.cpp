@@ -359,17 +359,6 @@ void ModeDroneShow::wait_for_start_time_start()
 
     // Reset home position to current location
     try_to_update_home_position();
-
-
-#if MODE_DYNAMIC_RTL == ENABLE
-    // 获取当前位置
-    home_pos_cm = inertial_nav.get_position_neu_cm();
-
-    g2.home_pos_x_cm.set(home_pos_cm.x);
-    g2.home_pos_y_cm.set(home_pos_cm.y);
-    g2.home_pos_y_cm.set(home_pos_cm.y);
-    gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] home_pos_cm: %f, %f, %f", home_pos_cm.x, home_pos_cm.y, home_pos_cm.z);    
-#endif
 }
 
 // waits for the start time of the show
@@ -727,12 +716,15 @@ void ModeDroneShow::performing_run()
     uint32_t now = AP_HAL::millis();
     uint32_t target_dt = copter.g2.drone_show_manager.get_controller_update_delta_msec();
 
+#if MODE_DYNAMIC_RTL == ENABLE
+
     if (check_reaching_rtl_altitude_ys()){
         _set_stage(Dynamic_Rtl);
         gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] DYNAMIC_RTL start!");
         copter.set_mode(Mode::Number::DYNAMIC_RTL, ModeReason::MISSION_END);
         exited_mode = 1;
     }
+#endif
 
     if (now - last_guided_command >= target_dt) {
         if (!send_guided_mode_command_during_performance()) {
@@ -771,89 +763,38 @@ void ModeDroneShow::performing_run()
 bool ModeDroneShow::check_reaching_rtl_altitude_ys()
 {
     AC_DroneShowManager::GuidedModeCommand home_pos_command;
-    // 原点位置
-    // if (!AP::ahrs().get_relative_position_NED_home(home_pos_command.pos)) {
-    //     gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] ERROR:get_relative_position_NED_home Failed!");
-    //     return false;
-    // }
+
     home_pos_command.pos = inertial_nav.get_position_neu_cm();
-    // gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] home__pos_m: x=%f y=%f z=%f\r\n", home_pos_command.pos.x, home_pos_command.pos.y, home_pos_command.pos.z);
 
     switch(status_flag){
         case 0:{
 
             if (home_pos_command.pos.z >= 500.0f){
                 status_flag = 1;
-                gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] status_flag: %d", status_flag);
+                gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] pos.z=: %f", home_pos_command.pos.z);
             }
 
             return false;
-            }break;
+        }break;
         case 1:{
             
             if (home_pos_command.pos.z <= 500.0f){
                 // status_flag = 2;
+                gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] pos.z=: %f", home_pos_command.pos.z);
                 return true;
-                gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] status_flag: %d", status_flag);
             }
 
             return false;
-            }break;
-        case 2:{
-            landing_start();
-            return true;
-            Vector3f current_pos = inertial_nav.get_position_neu_cm();  // 当前位置
-            gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] neu___pos_cm: %f, %f, %f", current_pos.x, current_pos.y, current_pos.z);
-            
-            float control_v_a = 2.0f; // m/s
-            // home_pos_command.pos.x = abs(home_pos_command.pos.x - current_pos.x*0.01f);
-            // home_pos_command.pos.y = abs(home_pos_command.pos.y - current_pos.y*0.01f);
-            // home_pos_command.pos.z = abs(home_pos_command.pos.z + current_pos.z*0.01f);
-            home_pos_command.pos.z = -home_pos_command.pos.z;
-            home_pos_command.vel = Vector3f(control_v_a,control_v_a,control_v_a);
-            home_pos_command.acc = Vector3f(control_v_a,control_v_a,control_v_a/2.0f);
-            home_pos_command.yaw_rate_cds = 0;
-
-            float yaw_rad = AP::ahrs().get_yaw();
-            constexpr float rad_to_cd_multiplier = (180.0f / M_PI) * 100.0f;
-            home_pos_command.yaw_cd = (int32_t)roundf(yaw_rad * rad_to_cd_multiplier);
-            
-            copter.mode_guided.set_destination_posvelaccel(
-                home_pos_command.pos, home_pos_command.vel, home_pos_command.acc,
-                /* use_yaw = */ true,
-                home_pos_command.yaw_cd,
-                /* use_yaw_rate = */ false,
-                home_pos_command.yaw_rate_cds
-            );
-
-            Vector3f target_pos = copter.mode_guided.get_target_pos().tofloat();  // 获取目标位置
-            gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] target_pos_m: %f, %f, %f", target_pos.x, target_pos.y, target_pos.z);
-
-
-            _altitude_locked_above_takeoff_altitude = false;
-            copter.g2.drone_show_manager.notify_guided_mode_command_sent(home_pos_command);
-            
-            // gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y]get_wp_distance_to_destination: %f", wp_nav->get_wp_distance_to_destination());
-            if (wp_nav->get_wp_distance_to_destination() <= 10) {
-                status_flag = 3;
-                gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y]status_flag: %d", status_flag);
-                gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] home_pos_command: x=%f y=%f z=%f\r\n", 
-                    home_pos_command.pos.x, home_pos_command.pos.y, home_pos_command.pos.z);
-            }
-            }break;
-        case 3:{
-            status_flag = 4;
-            gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y]run default: %d", status_flag);
-            }break;
+        }break;
         default:{
             status_flag = 0;
-            gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y]run default: %d", status_flag);
+                gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] pos.z=: %f", home_pos_command.pos.z);
             return false;
-            }break;
+        }break;
     }
     return true;
-
 }
+
 
 /*===========================Serein_Y===========================*/
 #endif

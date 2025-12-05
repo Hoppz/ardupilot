@@ -1173,19 +1173,41 @@ public:
     bool is_autopilot() const override { return true; }  // 此模式为自动飞行控制
     bool has_user_takeoff(bool must_navigate) const override { return false; }  // 不允许在此模式下直接起飞（必须是在空中切到此模式）
     uint32_t get_timeout_ms() const;
+
+    Vector3f home_pos_cm;
+
+    // Simple struct to contain a guided mode command that should be sent during
+    // performance
+    struct GuidedModeCommand {
+        Vector3f pos;
+        Vector3f vel;
+        Vector3f acc;
+        bool unlock_altitude;
+        float yaw_cd;
+        float yaw_rate_cds;
+
+        void clear() {
+            pos.zero();
+            vel.zero();
+            acc.zero();
+            unlock_altitude = false;
+            yaw_cd = 0.0f;
+            yaw_rate_cds = 0.0f;
+        }
+    };
+
 protected:
 
     const char *name() const override { return "DRAW_STAR"; }
     const char *name4() const override { return "STAR"; }
 
 private:
-    Vector3f path_ys[10];  // 航点数组
-    int path_num_ys;  // 当前航点号
 
-    void generate_path();  // 生成航线
-    void pos_control_start();  // 开始位置控制
-    void pos_control_run();  // 位置控制周期调用函数
-
+    Vector3f path_ys[10];
+    int path_num_ys;
+    
+    void initialization_start();
+    void pos_control_run();
 };
 
 /*===========================Serein_Y===========================*/
