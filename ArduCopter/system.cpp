@@ -218,7 +218,7 @@ void Copter::init_ardupilot()
     // 初始化子系统
     g2.drone_show_manager.init(wp_nav);
 
-    // 初始化 hard fence 
+    // initialise hard fence 
     g2.drone_show_manager.hard_fence.init();
 #endif
 

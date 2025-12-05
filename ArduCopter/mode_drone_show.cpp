@@ -1,12 +1,15 @@
 #include "Copter.h"
-#include "skybrush/skybrush.h"
+
+#include <skybrush/colors.h>
 
 #if MODE_GUIDED_ENABLED == ENABLED
 
-//* AC_DroneShowManager_Copter
-bool AC_DroneShowManager_Copter::get_current_location(Location& loc)  const
+/*
+ * Implementation of drone show flight mode
+ */
+
+bool AC_DroneShowManager_Copter::get_current_location(Location& loc) const
 {
-    // ahrs 姿态航向系统 (姿态估计中包含了位置估计)
     return copter.ahrs.get_location(loc);
 }
 
@@ -17,19 +20,20 @@ bool AC_DroneShowManager_Copter::get_current_relative_position_NED_origin(Vector
 
 void AC_DroneShowManager_Copter::_request_switch_to_show_mode()
 {
-    // 当 motor disarmed 才能切换
-    if( !copter.motors->armed() ){
-        copter.set_mode(Mode::Number::DRONE_SHOW,ModeReason::SCRIPTING);
+    // Drone show manager requested the copter to switch to show mode. We do this
+    // only if the motors are not armed.
+    if (!copter.motors->armed()) {
+        copter.set_mode(Mode::Number::DRONE_SHOW, ModeReason::SCRIPTING);
     }
-}
+};
 
-//* mode_drone_show
-ModeDroneShow::ModeDroneShow(void): 
-    Mode(),
+// Constructor.
+ModeDroneShow::ModeDroneShow(void) : Mode(),
     _stage(DroneShow_Off),
     _last_home_position_reset_attempt_at(0),
     _last_stage_change_at(0)
-{}
+{
+}
 
 bool ModeDroneShow::init(bool ignore_checks)
 {
@@ -37,216 +41,69 @@ bool ModeDroneShow::init(bool ignore_checks)
     return true;
 }
 
-
-// 至少以 25hz 调用, 实际上运行在 400hz
-// update_flight_mode: flightmode->run()
-void ModeDroneShow::run()
-{
-    check_change_in_parameters();
-    
-    switch (_stage) {
-        case DroneShow_Init:
-            // mode has just been initialized
-            initialization_run();
-            break;
-        
-        case DroneShow_WaitForStartTime:
-            // waiting for start time
-            wait_for_start_time_run();
-            break;
-
-        case DroneShow_Takeoff:
-            // taking off
-            takeoff_run();
-            break;
-        
-        case DroneShow_Performing:
-            // performing show
-            performing_run();
-            break;
-        case DroneShow_Landing:
-            // landing at the end of the show (normal termination)
-            landing_run();
-            break;
-
-        case DroneShow_RTL:
-            // returning to home position (abnormal termination)
-            rtl_run();
-            break;
-
-        case DroneShow_Loiter:
-            // holding position (joined show while airborne)
-            loiter_run();
-            break;
-
-        case DroneShow_Landed:
-            // landed successfully after a show
-            landed_run();
-            break;
-
-        case DroneShow_Error:
-            // failed to start a show
-            error_run();
-            break;
-
-        default:
-            break;
-    }
-}
-
 void ModeDroneShow::exit()
 {
     // Clear the timestamp when we last attempted to arm the drone
     _prevent_arming_until_msec = 0;
 
-    // 清除所有依赖 start time 的状态信息
+    // Clear all the status information that depends on the start time
     notify_start_time_changed();
 
-    // 设置当前的阶段为 "off"
-    _set_stage(DroneShowModeStage::DroneShow_Off);
-    
-    // 同时 drone show manager 已退出 drone show mode
+    // Set the stage to "off"
+    _set_stage(DroneShow_Off);
+
+    // Notify the drone show manager that the drone show mode exited
     copter.g2.drone_show_manager.notify_drone_show_mode_exited();
 }
 
-//* 判断是否允许解锁
 bool ModeDroneShow::allows_arming(AP_Arming::Method method) const
 {
     return (
-        // 只有当请求来自地面站 或者
-        // 同时满足
-        // 1. 成功加载了表演数据
-        // 2. 在有效的起飞时间
-        // 3. 用户设置了表演原点
-        // 4. 用户设置了表演的方西
+        // Always allow arming from GCS in case the operator wants to test
+        // the motors before takeoff. When the command does not come from the
+        // GCS, arm only if we have loaded the show, the takeoff time is
+        // valid and we have a show origin and orientation explicitly set up
+        // by the user
         method == AP_Arming::Method::MAVLINK || (
             copter.g2.drone_show_manager.loaded_show_data_successfully() &&
             copter.g2.drone_show_manager.has_valid_takeoff_time() &&
             copter.g2.drone_show_manager.has_explicit_show_origin_set_by_user() &&
-            copter.g2.drone_show_manager.has_explicit_show_origin_set_by_user()
+            copter.g2.drone_show_manager.has_explicit_show_orientation_set_by_user()
         )
     );
 }
 
-// 
-bool ModeDroneShow::use_pilot_yaw(void) const
+bool ModeDroneShow::cancel_requested() const
 {
-    return copter.mode_guided.use_pilot_yaw();
+    return copter.g2.drone_show_manager.cancel_requested();
 }
 
-//* 判断当前是否着陆
-bool ModeDroneShow::is_landing() const
-{       
-    switch (_stage)
-    {
-        case DroneShow_Landing:
-            return true;
-        case DroneShow_RTL:
-            return copter.mode_rtl.is_landing();
-        default:
-            return false; 
-    }
-    return false;
-}
-
-bool ModeDroneShow::is_taking_off() const
-{
-    //? 为什么要有个 reached_wp_destination ? 
-    return ( (_stage == DroneShow_Takeoff) && !wp_nav->reached_wp_destination() );
-}
-
-//* 处理来自地面站的起飞请求。可用于表演开始之前的起飞测试
-//! 主要用于起飞测试，不是表演开始！！！！ 
-// 我们需要重写Mode::do_user_takeoff_start的默认实现，因为它需要使用油门起飞
-// 这里我们只是将无人机发送到“起飞”状态。
+// Handles the takeoff command when sent from the GCS. This can be used for
+// testing the takeoff before the show.
+//
+// We need to override the default implementation of Mode::do_user_takeoff_start()
+// because that one would require the pilot to use the throttle to take off.
+// Here we simply send the drone to the "takeoff" state.
 bool ModeDroneShow::do_user_takeoff_start(float takeoff_alt_cm)
 {
-    // takeoff_alt_cm 被忽略了，这是经过考虑了的，不想让 takeoff_start() 的逻辑复杂
-    // 起飞的高度可以在参数中设置 "SHOW_TAKEOFF_ALT"
-    if( try_to_start_motors_if_prepared_to_take_off() ){
+    // takeoff_alt_cm is ignored. This is deliberate; I do not want to complicate
+    // the logic in takeoff_start(). The takeoff altitude can be configured in
+    // a parameter (SHOW_TAKEOFF_ALT)
+    if (try_to_start_motors_if_prepared_to_take_off()) {
         takeoff_start();
     }
 
-    // 如果没有定义表演的原点起飞可能失败。
-    // 所以我们需要检测是否进入了 takeoff stage 同时返回 false 如果没有进入
-    if( _stage == DroneShow_Takeoff ){
-        // 在起飞后进入悬停模式，给地面站返回成功。
+    // takeoff_start() may not succeed if the user has not configured a show
+    // origin so we check whether we have entered the takeoff stage and return
+    // false if we have not.
+    if (_stage == DroneShow_Takeoff) {
+        // Remember to start loitering after takeoff, and indicate successs
         _next_stage_after_takeoff = DroneShow_Loiter;
         return true;
     } else {
-        // 给地面站返回失败
+        // Return failure to the GCS
         return false;
     }
-
-}
-
-// 获取目标点
-bool ModeDroneShow::get_wp(Location& destination) const
-{
-    switch(_stage) {
-        case DroneShow_Performing:
-            return copter.mode_guided.get_wp(destination);
-        case DroneShow_Loiter: 
-            return copter.mode_loiter.get_wp(destination);
-        case DroneShow_Landing:
-            return copter.mode_land.get_wp(destination);
-        case DroneShow_RTL:
-            return copter.mode_rtl.get_wp(destination);
-        default:
-            return false;
-    }
-}
-
-// 距离目标点的水平距离（单位为厘米）。
-uint32_t ModeDroneShow::wp_distance() const
-{
-    switch(_stage) {
-        case DroneShow_Performing:
-            return copter.mode_guided.wp_distance();
-        case DroneShow_Landing:
-            return copter.mode_land.wp_distance();
-        case DroneShow_RTL:
-            return copter.mode_rtl.wp_distance();
-        default:
-            return false;
-    }
-}
-
-// 返回无人机到目标点的航向角（bearing）
-int32_t ModeDroneShow::wp_bearing() const 
-{
-    switch(_stage) {
-        case DroneShow_Performing:
-            return copter.mode_guided.wp_bearing();
-        case DroneShow_Landing:
-            return copter.mode_land.wp_bearing();
-        case DroneShow_RTL:
-            return copter.mode_rtl.wp_bearing();
-        default:
-            return false;
-    }
-}
-
-// 用于在不同表演阶段返回无人机当前的横向误差（crosstrack error）
-float ModeDroneShow::crosstrack_error() const
-{
-    switch(_stage) {
-        case DroneShow_Performing:
-            return copter.mode_guided.crosstrack_error();
-        case DroneShow_Loiter: 
-            return copter.mode_loiter.crosstrack_error();
-        case DroneShow_Landing:
-            return copter.mode_land.crosstrack_error();
-        case DroneShow_RTL:
-            return copter.mode_rtl.crosstrack_error();
-        default:
-            return false;
-    }
-}
-
-bool ModeDroneShow::cancel_requested() const 
-{
-    return copter.g2.drone_show_manager.cancel_requested();
 }
 
 int32_t ModeDroneShow::get_default_yaw_cd() const
@@ -254,237 +111,304 @@ int32_t ModeDroneShow::get_default_yaw_cd() const
     return copter.initial_armed_bearing;
 }
 
-// 函数用于计算自上次尝试重置“Home”位置以来经过的时间（以毫秒为单位）
-//! 在 skybrush 中写的 int32_t 我觉得有问题
-uint32_t ModeDroneShow::get_elapsed_time_since_last_home_position_reset_attempt_msec() const
+int32_t ModeDroneShow::get_elapsed_time_since_last_home_position_reset_attempt_msec() const
 {
-    // AP_HAL::mills() 返回一个 uint32_t 类型的值，表示当前系统时间的毫秒数
     return AP_HAL::millis() - _last_home_position_reset_attempt_at;
 }
 
-uint32_t ModeDroneShow::get_elapsed_time_since_last_stage_change_msec() const
+int32_t ModeDroneShow::get_elapsed_time_since_last_stage_change_msec() const
 {
     return AP_HAL::millis() - _last_stage_change_at;
 }
 
-// 检测相关参数的变化，同时打印到 console
-// 主要检测 授权状态，启动时间
-void ModeDroneShow::check_change_in_parameters()
+// ModeDroneShow::run - runs the main drone show controller
+// should be called at 25hz or more. This function is actually running at
+// 400 Hz
+void ModeDroneShow::run()
 {
-    // 上次检测到的授权状态
+    check_changes_in_parameters();
+
+    // call the correct auto controller
+    switch (_stage) {
+
+    case DroneShow_Init:
+        // mode has just been initialized
+        initialization_run();
+        break;
+
+    case DroneShow_WaitForStartTime:
+        // waiting for start time
+        wait_for_start_time_run();
+        break;
+
+    case DroneShow_Takeoff:
+        // taking off
+        takeoff_run();
+        break;
+
+    case DroneShow_Performing:
+        // performing show
+        performing_run();
+        break;
+
+    case DroneShow_Landing:
+        // landing at the end of the show (normal termination)
+        landing_run();
+        break;
+
+    case DroneShow_RTL:
+        // returning to home position (abnormal termination)
+        rtl_run();
+        break;
+
+    case DroneShow_Loiter:
+        // holding position (joined show while airborne)
+        loiter_run();
+        break;
+
+    case DroneShow_Landed:
+        // landed successfully after a show
+        landed_run();
+        break;
+
+    case DroneShow_Error:
+        // failed to start a show
+        error_run();
+        break;
+
+    default:
+        break;
+    }
+}
+
+// Checks changes in relevant parameter values and reports them to the console
+void ModeDroneShow::check_changes_in_parameters()
+{
     static bool last_seen_authorization;
-    // 上次检测到的启动时间
     static uint64_t last_seen_start_time;
     bool current_authorization = copter.g2.drone_show_manager.has_authorization_to_start();
     uint64_t current_start_time = copter.g2.drone_show_manager.get_start_time_epoch_undefined();
 
-    if( last_seen_authorization != current_authorization ){
-        last_seen_authorization = current_authorization;
+    if (current_start_time != last_seen_start_time) {
+        last_seen_start_time = current_start_time;
         notify_start_time_changed();
     }
 
-    if( last_seen_start_time !=  current_start_time  ){
-        last_seen_start_time = current_start_time;
+    if (last_seen_authorization != current_authorization) {
+        last_seen_authorization = current_authorization;
         notify_authorization_changed();
     }
 }
 
-void ModeDroneShow::notify_start_time_changed()
+bool ModeDroneShow::get_wp(Location& destination) const
 {
-    // 清除飞行前验证标记，无论之前是否执行
-    _preflight_calibration_done = false;
-
-    // 清除 home position
-    _home_position_set = false;
-}
-
-void ModeDroneShow::notify_authorization_changed()
-{
-    // 处于等待起飞阶段，同时已经授权起飞
-    if(_stage == DroneShow_WaitForStartTime && copter.g2.drone_show_manager.has_authorization_to_start()){
-        // 更新 home position, 重载 AGL 为 0
-        try_to_update_home_position();
-    }
-}
-
-//! 在表演的时候发送一个 guided mode 命令  !!!!!!!!!
-//! performing_run 发一个请求，这个函数直接把读取和设置航点这件事都做了
-//  计算飞行轨迹
-bool ModeDroneShow::send_guided_mode_command_during_performance()
-{
-    AC_DroneShowManager::GuidedModeCommand command;
-
-    // 返回的参数都在 command 里面
-    if( copter.g2.drone_show_manager.get_current_guided_mode_command_to_send(
-        command,get_default_yaw_cd(),
-        _altitude_locked_above_takeoff_altitude
-    )) {
-        //! 使用 guided mode 的函数设置航点
-        copter.mode_guided.set_destination_posvelaccel(
-            command.pos, command.vel, command.acc,
-            /* use_yaw = */ true, command.yaw_cd,
-            /* use_yaw_rate =  */true, command.yaw_rate_cds
-        );
-
-        if( command.unlock_altitude ){
-            _altitude_locked_above_takeoff_altitude = false;
-        }
-
-        copter.g2.drone_show_manager.notify_guided_mode_command_sent(command);
-
-        return true;
-    } else {
+    switch (_stage) {
+    case DroneShow_Performing:
+        return copter.mode_guided.get_wp(destination);
+    case DroneShow_Loiter:
+        return copter.mode_loiter.get_wp(destination);
+    case DroneShow_Landing:
+        return copter.mode_land.get_wp(destination);
+    case DroneShow_RTL:
+        return copter.mode_rtl.get_wp(destination);
+    default:
         return false;
     }
 }
 
-// 无论无人机是否准备好执行表演，如果电机尚未运行，则在表演前启动电机。
-bool ModeDroneShow::start_motors_if_not_running()
+int32_t ModeDroneShow::wp_bearing() const
 {
-    bool success = false;
-
-    if( AP::arming().is_armed() ){
-        // alreadly armed
-        success = true;
-    } else if( _prevent_arming_until_msec > AP_HAL::millis() ){
-        // 拒绝 arming 因为近期已经试过了
-    } else if( AP::arming().arm( AP_Arming::Method::SCRIPTING, 
-               /* do_arming_checks = */ true))
-    {
-        success = true;
-    } else {
-        // 起飞前检测未通过，防止连续多次尝试
-        _prevent_arming_until_msec = AP_HAL::millis() + 1000;
-    }
-
-    return success;
-}
-
-// 设置 home position 为无人机当前的位置
-bool ModeDroneShow::try_to_update_home_position()
-{
-    _last_home_position_reset_attempt_at = AP_HAL::millis();
-
-    if( !is_disarmed_or_landed() ){
-        // 在飞行过程中不能设置
+    switch (_stage) {
+    case DroneShow_Performing:
+        return copter.mode_guided.wp_bearing();
+    case DroneShow_Landing:
+        return copter.mode_land.wp_bearing();
+    case DroneShow_RTL:
+        return copter.mode_rtl.wp_bearing();
+    default:
         return false;
     }
-    return copter.set_home_to_current_location(/* lock = */ false);
 }
 
-// Starts the motors before the show if they are not running already, after
-// checking whether the drone is prepared to take off (according to the
-// show manager)
-bool ModeDroneShow::try_to_start_motors_if_prepared_to_take_off()
+uint32_t ModeDroneShow::wp_distance() const
 {
-    return copter.g2.drone_show_manager.is_prepared_to_take_off() && start_motors_if_not_running();
+    switch (_stage) {
+    case DroneShow_Performing:
+        return copter.mode_guided.wp_distance();
+    case DroneShow_Landing:
+        return copter.mode_land.wp_distance();
+    case DroneShow_RTL:
+        return copter.mode_rtl.wp_distance();
+    default:
+        return false;
+    }
 }
 
-// 开始无人机初始化阶段
+float ModeDroneShow::crosstrack_error() const
+{
+    switch (_stage) {
+    case DroneShow_Performing:
+        return copter.mode_guided.crosstrack_error();
+    case DroneShow_Loiter:
+        return copter.mode_loiter.crosstrack_error();
+    case DroneShow_Landing:
+        return copter.mode_land.crosstrack_error();
+    case DroneShow_RTL:
+        return copter.mode_rtl.crosstrack_error();
+    default:
+        return false;
+    }
+}
+
+bool ModeDroneShow::is_landing() const
+{
+    switch (_stage) {
+        case DroneShow_Landing:
+            return true;
+        case DroneShow_RTL:
+            return copter.mode_rtl.is_landing();
+        default:
+            return false;
+    }
+    return false;
+}
+
+bool ModeDroneShow::is_taking_off() const
+{
+    return ((_stage == DroneShow_Takeoff) && !wp_nav->reached_wp_destination());
+}
+
+// returns true if pilot's yaw input should be used to adjust vehicle's heading
+bool ModeDroneShow::use_pilot_yaw(void) const
+{
+    // We allow using the pilot's yaw input if guided mode is configured in this
+    // way. This is because we are essentially calling copter.mode_guided later
+    // in the "performing" stage periodically, and in that function it's the
+    // return value of copter.mode_guided.use_pilot_yaw() that decides whether
+    // yaw input is accepted anyway. This function just makes it consistent that
+    // when we are doing our own takeoff, then we also do the same (because
+    // takeoff is implemented with auto_takeoff_run(), which asks _us_ how the
+    // pilot input should be handled).
+    return copter.mode_guided.use_pilot_yaw();
+}
+
+// starts the initialization phase of the drone
 void ModeDroneShow::initialization_start()
 {
-    // 设置无人机的阶段
+    // Set the appropriate stage
     _set_stage(DroneShow_Init);
 
-    //? Assume normal operation: we will start performing after the takeoff
+    // Assume normal operation: we will start performing after the takeoff
     _next_stage_after_takeoff = DroneShow_Performing;
 
-    // 清除上次尝试解锁的时间的记录
+    // Clear the timestamp when we last attempted to arm the drone
     _prevent_arming_until_msec = 0;
 
-    //* This is copied from ModeAuto::init()
+    // This is copied from ModeAuto::init()
 
     // initialise waypoint and spline controller
-    //? what is spline controller? 
     wp_nav->wp_and_spline_init();
 
-    // 清除 guided mode 的限制，我们会在内部使用 guided mode 来控制表演
+    // Clear the limits of the guided mode; we will use guided mode internally
+    // to control the show
     copter.mode_guided.limit_clear();
 
-    // Set auto-yaw mode to HOLD
-    // 不让无人机旋转
+    // Set auto-yaw mode to HOLD -- we don't want the drone to start turning
+    // towards waypoints, but we don't have a fixed heading at this point where
+    // we could force the drone to.
     auto_yaw.set_mode(AutoYaw::Mode::HOLD);
 
-    //* Part from ModeAuto::init() ends here
+    // Part from ModeAuto::init() ends here
 
-    // 清除所有依赖 start time 的状态信息
+    // Clear all the status information that depends on the start time
     notify_start_time_changed();
 
-    // 通知 drone_show_manager , drone show mode 已初始化完成
+    // Notify the drone show manager that the drone show mode was initialized
     copter.g2.drone_show_manager.notify_drone_show_mode_initialized();
 }
 
-// 第一次激活的时候初始化 drone mode show
+// initializes the drone show mode after it has been activated the first time
 void ModeDroneShow::initialization_run()
 {
-    // 确定是否在空中
-    if( is_disarmed_or_landed() ){
-        // 不在空中的话就切换到 wait for start time 模式
-        wait_for_start_time_start(); 
+    // First we need to decide whether we are in the air or not
+    if (is_disarmed_or_landed()) {
+        // Great, let's move to the state where we wait for the start time
+        wait_for_start_time_start();
     } else {
-        // 在空中的话就进入 loiter 模式，因为我们不知道 表演的时钟
-        loiter_run();
+        // We are already in the air. We enter position hold mode as we don't
+        // know where the show clock is
+        loiter_start();
     }
 }
 
-// 进入等待表演开始阶段
+// starts the phase where we are waiting for the start time of the show
 void ModeDroneShow::wait_for_start_time_start()
 {
     _set_stage(DroneShow_WaitForStartTime);
 
+    // Remember that we have not attempted to start the motors yet
     _motors_started = false;
 
-    // 设置当前的位置为 home position
+    // Reset home position to current location
     try_to_update_home_position();
 }
 
-//!  wait for the start time run
-//!  怎么没有检测磁罗盘是否校准那些
+// waits for the start time of the show
 void ModeDroneShow::wait_for_start_time_run()
 {
     float time_until_takeoff_sec = copter.g2.drone_show_manager.get_time_until_takeoff_sec();
-    float time_since_takeoff_sec = - time_until_takeoff_sec;
-    //? 5 秒之后就不起飞了
+    float time_since_takeoff_sec = -time_until_takeoff_sec;
     const float latest_takeoff_attempt_after_scheduled_takeoff_time_in_seconds = 5.0f;
 
-    // 所有参数都设置为 0 
+    // Drone is in standby so keep all I terms in controllers at zero
     attitude_control->reset_yaw_target_and_rate();
     attitude_control->reset_rate_controller_I_terms();
     pos_control->standby_xyz_reset();
-    attitude_control->input_euler_angle_roll_pitch_euler_rate_yaw(0.0f,0.0f,0.0f);
 
-    // This is copied from ModeStabilize::run()
-    if( !motors->armed() ){ // 无人机没有解锁 -> 关闭电机
-        motors -> set_desired_spool_state(AP_Motors::DesiredSpoolState::SHUT_DOWN);
-    } else if( !copter.ap.land_complete ){ // 没有在地面 -> 取消油门限制
-        motors -> set_desired_spool_state(AP_Motors::DesiredSpoolState::THROTTLE_UNLIMITED);
-    } else {//! 解锁了且在地面，进入怠速（这里可能要改）
+    // Force attitude controller to zero target angles and yaw rate in case it
+    // received something else from somewhere before we switched to this mode
+    attitude_control->input_euler_angle_roll_pitch_euler_rate_yaw(0.0f, 0.0f, 0.0f);
+
+    // This is copied from ModeStabilize::run() -- it is needed to allow the 
+    // user to turn on the motors and spin them up while idling on the ground.
+    // The part that allows unlimited throttle is removed; we allow unlimited
+    // throttle only if we somehow ended up in the air for some strange reason
+    if (!motors->armed()) {
+        motors->set_desired_spool_state(AP_Motors::DesiredSpoolState::SHUT_DOWN);
+    } else if (!copter.ap.land_complete) {
+        motors->set_desired_spool_state(AP_Motors::DesiredSpoolState::THROTTLE_UNLIMITED);
+    } else {
         motors->set_desired_spool_state(AP_Motors::DesiredSpoolState::GROUND_IDLE);
     }
 
-    // 错过起飞了, 切换到 land 或者 loiter 模式
-    if( time_since_takeoff_sec > latest_takeoff_attempt_after_scheduled_takeoff_time_in_seconds + 1 ){
-        if( is_disarmed_or_landed() ){
-            landing_start();
+    if (time_since_takeoff_sec > latest_takeoff_attempt_after_scheduled_takeoff_time_in_seconds + 1) {
+        // We are late to the party, just move to the landed or poshold state.
+        // The +1 second is needed to ensure that we show a "giving up"
+        // failure message below
+        if (is_disarmed_or_landed()) {
+            landed_start();
         } else {
-            // 理论上，应该不存在这种情况
+            // In theory, this branch should not happen because we don't move to
+            // the "wait for start time" phase if we are flying
             loiter_start();
         }
     } else {
-        // 在起飞的10 秒内
-        if( time_until_takeoff_sec <= 10 ){
-            // 检查气压计
-            if( !_preflight_calibration_done ){
-                // barometer 气压计
+        if (time_until_takeoff_sec <= 10) {
+            if (!_preflight_calibration_done) {
+                // We calibrate the barometer 10 seconds before our takeoff time.
+                //
+                // Preflight calibration does not hurt anyone so we don't need the
+                // takeoff authorization for this
+
                 // This is copied from GCS_MAVLINK::_handle_command_preflight_calibration_baro()
                 AP::baro().update_calibration();
 
                 _preflight_calibration_done = true;
             }
-            
-            // 设置 home position
-            if( !_home_position_set ){
-                if( !try_to_update_home_position() ){
+
+            if (!_home_position_set) {
+                // Update our home to the current location so we have zero AGL
+                if (!try_to_update_home_position()) {
                     gcs().send_text(MAV_SEVERITY_CRITICAL, "Could not set home position, giving up");
                     AP::logger().Write_Error(LogErrorSubsystem::NAVIGATION, LogErrorCode::FAILED_TO_INITIALISE);
                     error_start();
@@ -492,22 +416,25 @@ void ModeDroneShow::wait_for_start_time_run()
                     _home_position_set = true;
                 }
             }
-        } else { //! 还有很多时间，直接设为 false （maybe need change ）
+        } else {
+            // We still have plenty of time until takeoff so note that we haven't
+            // done the preflight calibration and haven't set the home position.
             _preflight_calibration_done = false;
             _home_position_set = false;
         }
 
-        //! 剩下的都是需要起飞授权的 ( 起飞授权这套逻辑不好，后面要改，这是给使用地面站的人增加负担 )
-        if( copter.g2.drone_show_manager.has_authorization_to_start() ){
-            if( time_until_takeoff_sec <=8 && !_motors_started ){
+        // For the remaining parts, we need takeoff authorization
+        if (copter.g2.drone_show_manager.has_authorization_to_start()) {
+            if (time_until_takeoff_sec <= 8 && !_motors_started) {
                 // We attempt to start the motors 8 seconds before our takeoff time,
                 // and we keep on doing so until 5 seconds after the takeoff time, when
                 // we give up.
                 //
                 // No need to set the home position once again; arming the motors
                 // will reset AGL to zero.
-                if( time_since_takeoff_sec < latest_takeoff_attempt_after_scheduled_takeoff_time_in_seconds ){
-                    if( try_to_start_motors_if_prepared_to_take_off() ){
+                if (time_since_takeoff_sec < latest_takeoff_attempt_after_scheduled_takeoff_time_in_seconds) {
+                    if (try_to_start_motors_if_prepared_to_take_off()) {
+                        // Great, motors started
                         _motors_started = true;
                     }
                 } else {
@@ -517,14 +444,18 @@ void ModeDroneShow::wait_for_start_time_run()
                 }
             }
 
-            if( time_until_takeoff_sec <= 0 && _motors_started && _home_position_set ){
-                //* time to take off!
+            if (time_until_takeoff_sec <= 0 && _motors_started && _home_position_set) {
+                // Time to take off!
                 takeoff_start();
             }
-        }else {
-            // 如果没有授权，停止已开始的电机。电机有可能是在地面站测试旋转。
-            if(_motors_started) {
-                if(AP::arming().is_armed()){
+        } else {
+            // No authorization; stop the motors if we have started them. Note
+            // that we don't do anything if _motors_started is false. The motors
+            // may still be running in this case, but in this case they were
+            // started by the operator with a MAVLink command for testing
+            // purposes.
+            if (_motors_started) {
+                if (AP::arming().is_armed()) {
                     AP::arming().disarm(AP_Arming::Method::SCRIPTING);
                 }
 
@@ -534,13 +465,15 @@ void ModeDroneShow::wait_for_start_time_run()
     }
 }
 
+// starts the phase where we are taking off at the start of the show
 void ModeDroneShow::takeoff_start()
 {
     Location current_loc(copter.current_loc);
     int32_t current_alt, target_alt;
 
-    // 检测无人机是否知道自己的位置
-    if( !copter.current_loc.initialised() ){
+    // check whether the drone knows its own position
+    if (!copter.current_loc.initialised())
+    {
         // This should not happen, but nevertheless let's move to the
         // error state if we don't know where we are
         gcs().send_text(MAV_SEVERITY_CRITICAL, "Failed to take off, no known location");
@@ -549,130 +482,169 @@ void ModeDroneShow::takeoff_start()
         return;
     }
 
-    // 通知 drone_show_manager 要起飞了。 drone_show_manager 可能
-    // 拒绝起飞，因为 show orign 或者 orientation 没有设置
-    if( !copter.g2.drone_show_manager.notify_takeoff_attempt() ){
+    // notify the drone show manager that we are about to take off. The drone
+    // show manager _may_ cancel the takeoff if it deems that the drone is not
+    // prepared for takeoff (e.g., the show origin or orientation was not
+    // configured)
+    if (!copter.g2.drone_show_manager.notify_takeoff_attempt())
+    {
         gcs().send_text(MAV_SEVERITY_CRITICAL, "Takeoff cancelled by show manager");
         AP::logger().Write_Error(LogErrorSubsystem::NAVIGATION, LogErrorCode::FAILED_TO_INITIALISE);
         error_start();
         return;
     }
 
-    // 获取当前 ekf 的估计值， auto_takeoff_start 需要这个参数
-    if( !current_loc.get_alt_cm(Location::AltFrame::ABOVE_ORIGIN, current_alt)) {
+    // get current altitude above EKF origin because auto_takeoff_start() works
+    // with altitude above EKF origin
+    if (!current_loc.get_alt_cm(Location::AltFrame::ABOVE_ORIGIN, current_alt)) {
         gcs().send_text(MAV_SEVERITY_CRITICAL, "Failed to get current altitude above home");
         AP::logger().Write_Error(LogErrorSubsystem::NAVIGATION, LogErrorCode::FAILED_TO_SET_DESTINATION);
         error_start();
         return;
     }
 
-    // 基本的检测结束，可以进入起飞模式了
+    // now that we are past the basic checks, we can commit ourselves to entering
+    // takeoff mode
     _set_stage(DroneShow_Takeoff);
 
-    //! 设置起飞的目标值
+    // set the target altitude of the takeoff
     target_alt = current_alt + copter.g2.drone_show_manager.get_takeoff_altitude_cm();
 
-    //* the body of this function from here on is mostly adapted from
+    // the body of this function from here on is mostly adapted from
     // ModeAuto::takeoff_start()
 
-    // 清零 I 项可以防止在起飞时积累的误差影响起飞的平稳性，确保无人机从一个“干净”的状态开始。
+    // clear I term when we're taking off
     pos_control->init_z_controller();
 
     // initialise alt for WP_NAVALT_MIN and set completion alt
-    auto_takeoff.start(target_alt, /* terrain_alt = */false);
+    auto_takeoff.start(target_alt, /* terrain_alt = */ false);
 
-    //* part adapted from ModeAuto::takeoff_start() ends here
+    // part adapted from ModeAuto::takeoff_start() ends here
 
-    // 确保偏航角的目标值和我们当前的值一样，清零 I 项避免积累误差在起飞中产生不必要的扰动。
+    // make sure that the yaw target is our current heading and there are no I terms
+    // in the attitude control rate controller
     attitude_control->reset_yaw_target_and_rate();
     attitude_control->reset_rate_controller_I_terms();
 
-    // 设置偏航目标为无人机起飞时的初始方向
+    // set yaw target to initial bearing where we were armed. Note that the yaw
+    // input of the pilot will override this in auto_takeoff.run() if an RC is
+    // connected and pilot yaw input in guided mode is allowed.
     auto_yaw.set_fixed_yaw(
-        /* [cd] -> [deg] */ get_default_yaw_cd() * 0.01f, 
+        get_default_yaw_cd() * 0.01f,  /* [cd] -> [deg] */
         /* turn_rate_dps = */ 0, /* direction = */ 0, /* relative_angle = */ 0
     );
 
-    // 将无人机状态设置为自动起飞模式所需的“自动解锁”状态。
+    // pretend that we were armed by the user by raising the throttle; the auto
+    // takeoff routine won't work without this.
     copter.set_auto_armed(true);
 
-    // 设置未着陆
-    copter.set_land_complete(false);
+	// also reset the landing detector state
+	copter.set_land_complete(false);
 }
 
-//* 执行起飞
+// performs the takeoff stage
 void ModeDroneShow::takeoff_run()
 {
     bool completed = false;
 
     auto_takeoff.run();
 
-    if( cancel_requested() ){
-        // 如果取消了起飞，则立刻降落
+    if (cancel_requested()) {
+        // if a cancellation was requested, land immediately
         landing_start();
-    } else if( !motors->armed()){
-        // 如果电机还没解锁，那就是前面某个环节出问题了
+    } else if (!motors->armed()) {
+        // if the motors are not armed any more, something is wrong so move to the
+        // error stage. This typically happens if we crash during takeoff.
         gcs().send_text(MAV_SEVERITY_CRITICAL, "Motors disarmed during takeoff");
         error_start();
-    } else if( takeoff_completed() ){
+    } else if (takeoff_completed()) {
+        // if the takeoff has finished, move to the next stage
+        
+        // hoppz 
+        gcs().send_text(MAV_SEVERITY_INFO, "[takeoff_run] takeoff completed");
+        // hoppz
+
         completed = true;
     }
-    
-    if( completed ) {
-        // 切换到下一个阶段, 正常来说应该是进入 performing 
-        switch(_next_stage_after_takeoff){
+
+    if (completed) {
+        // Choose what the next stage should be. The default stage is "performing",
+        // except if we are specifically instructed to start loitering or
+        // landing instead (for testing purposes)
+        switch (_next_stage_after_takeoff) {
             case DroneShow_Loiter:
+                // hoppz
+                gcs().send_text(MAV_SEVERITY_CRITICAL,"[takeoff_run] start loiter");
+                // hoppz
                 loiter_start();
                 break;
             case DroneShow_Landing:
             case DroneShow_Landed:
+                // hoppz
+                gcs().send_text(MAV_SEVERITY_CRITICAL,"[takeoff_run] start landing");
+                // hoppz
                 landing_start();
                 break;
             default:
+                // hoppz
+                gcs().send_text(MAV_SEVERITY_INFO,"[takeoff_run] start performing!!!");
+                // hoppz
                 performing_start();
         }
 
+        // Reset the "next stage after takeoff" marker to its default
         _next_stage_after_takeoff = DroneShow_Performing;
     }
 }
 
-//* 返回是否成功的起飞，只会在 takeoff stage run 中调用
+// returns whether the takeoff operation has finished successfully. Must be called
+// from the takeoff stage only.
 bool ModeDroneShow::takeoff_completed() const
 {
-    if( _stage == DroneShow_Takeoff ) {
-        if( _next_stage_after_takeoff == DroneShow_Performing ){
-            // 下一步开始就会跟随舞步文件，只有在至少达到预定高度的 70%
-            // 同时现在的位置高于起飞高度时才会进入下一个阶段
+    if (_stage == DroneShow_Takeoff) {
+        if (_next_stage_after_takeoff == DroneShow_Performing) {
+            /* Next step will start following the show trajectory. We can safely
+             * enter that stage if we have reached 70% of our takeoff altitude
+             * _and_ the desired altitude of the show trajectory at that time
+             * is above the takeoff altitude to prevent temporarily stopping the
+             * drone at the takeoff altitude */
             Location loc;
             int32_t altitude_above_home_cm;
             int32_t desired_altitude_above_home_cm;
             AC_DroneShowManager* show_manager = &copter.g2.drone_show_manager;
 
-            if(
+            if (
                 show_manager->get_current_location(loc) &&
-                loc.get_alt_cm(Location::AltFrame::ABOVE_HOME,altitude_above_home_cm)
-            ){
-                //* 大于目标高度的 70%
-                if( altitude_above_home_cm >= 0.7 * show_manager->get_takeoff_altitude_cm() )  {
-                    //! 高度是够了，但是轨迹已经准备好了吗？ (need change)
+                loc.get_alt_cm(Location::AltFrame::ABOVE_HOME, altitude_above_home_cm)
+            )
+            {
+                if (altitude_above_home_cm >= 0.7 * show_manager->get_takeoff_altitude_cm())
+                {
+                    // Altitude above home seems high enough, but is the trajectory
+                    // already ahead of us?
                     float elapsed = show_manager->get_elapsed_time_since_start_sec();
-                    show_manager->get_desired_global_position_at_seconds(elapsed,loc);
-
-                    // 如果成功获取了说明航点已经准备好了
-                    if( loc.get_alt_cm(Location::AltFrame::ABOVE_HOME, desired_altitude_above_home_cm) ){
+                    show_manager->get_desired_global_position_at_seconds(elapsed, loc);
+                    if (loc.get_alt_cm(Location::AltFrame::ABOVE_HOME, desired_altitude_above_home_cm))
+                    {
                         return desired_altitude_above_home_cm >= altitude_above_home_cm;
-                    } else {
+                    }
+                    else
+                    {
                         // This should not happen either, especially because we've already been
                         // through a successfull call to loc.get_alt_cm() if we managed to get
                         // here.
                         return false;
                     }
-                } else {
+                }
+                else
+                {
                     // We are above 70% of the takeoff altitude but the trajectory
                     // is behind so wait until it catches up
                     return false;
                 }
-            } else {
+            }
+            else
+            {
                 // This should not happen; it usually means that we do not have an
                 // EKF origin yet. The safest is to return false so we do not
                 // proceed to the "performing" phase with this error.
@@ -698,7 +670,7 @@ bool ModeDroneShow::takeoff_completed() const
     }
 }
 
-// 返回起飞是不是超时了
+// returns whether the current takeoff attempt is taking too long time
 bool ModeDroneShow::takeoff_timed_out() const
 {
     if (_stage == DroneShow_Takeoff) {
@@ -708,66 +680,92 @@ bool ModeDroneShow::takeoff_timed_out() const
     }
 }
 
-//* 表演开始阶段
+// starts the phase where we are actually performing the show
 void ModeDroneShow::performing_start()
 {
     _set_stage(DroneShow_Performing);
+    // hoppz
+    gcs().send_text(MAV_SEVERITY_INFO,"[performing_start] get in");
+    // hoppz
 
-// 起落架
-// #if AP_LANDINGGEAR_ENABLED
-//     // optionally retract landing gear
-//     copter.landinggear.retract_after_takeoff();
-// #endif
+#if AP_LANDINGGEAR_ENABLED
+    // optionally retract landing gear
+    copter.landinggear.retract_after_takeoff();
+#endif
 
-    // guided mode 初始化
+    // call regular guided flight mode initialisation
     copter.mode_guided.init(true);
-    
-    // 进入导航引导起始点时，初始化引导的起始时间和起始位置，供后续的导航限制检查参考
+
+    // initialise guided start time and position as reference for limit checking
     copter.mode_guided.limit_init_time_and_pos();
 }
 
-//* 表演执行
+// executes the show performance
 void ModeDroneShow::performing_run()
 {
-    // 上次发送指令的时间
     static uint32_t last_guided_command = 0;
-    // 是否退出了表演模式
     bool exited_mode = 0;
-    // 当前的时间
     uint32_t now = AP_HAL::millis();
-    // 获取预设的更新间隔
     uint32_t target_dt = copter.g2.drone_show_manager.get_controller_update_delta_msec();
 
-    if( now - last_guided_command >= target_dt ) {
-        //* send_guided_mode_command_during_performance 就把设置航点这件事做完了
-        if( !send_guided_mode_command_during_performance() ){
+    if (now - last_guided_command >= target_dt) {
+        if (!send_guided_mode_command_during_performance()) {
             // Failed to send guided mode command; try to switch to position
             // hold instead. This should not happen anyway.
             gcs().send_text(MAV_SEVERITY_ERROR, "Failed to send guided mode command");
             loiter_start();
             exited_mode = 1;
         }
-        //? 这里为什么不用 AP_HAL::millis() ?
         last_guided_command = now;
     }
 
-    // 飞下一个航点
-    if( !exited_mode ) {
+    // call regular guided flight mode run function
+    if (!exited_mode) {
         copter.mode_guided.run();
     }
 
-    if( cancel_requested() ){
+    if (cancel_requested()) {
+        // if a cancellation was requested, return to home and then land
         rtl_start();
-    } else if (!motors -> armed() ){
+    } else if (!motors->armed()) {
         // if the motors are not armed any more, something is wrong so move to the
         // error stage. This typically happens if we crash during a show.
         gcs().send_text(MAV_SEVERITY_CRITICAL, "Motors disarmed during show");
         error_start();
-    } else if( performing_completed() ){
-        // 表演完了进入返回
+    } else if (hoppz_check_reaching_rtl_altitude() || performing_completed()) {
+        // if we have finished the show, land
         landing_start();
     }
-}  
+}
+
+/// hoppz
+/// 用于在降落的时候切换到 RTL 模式, 
+// TODO(hoppz): 在整个表演的过程中会一直检测, 这种方式可能不太合理
+bool ModeDroneShow::hoppz_check_reaching_rtl_altitude()
+{
+    // TODO(hoppz): 当前的 rtl 高度参数以及 rtl 的返航
+    //     重新写一个模式，以及参数，不要影响 ardupilot 正常工作
+
+    // int32_t rtl_height = copter.g2.drone_show_manager.get_switch_rtl_altitude_cm(); ///< 当前切换到 rtl 的高度
+    int32_t rtl_height = copter.g.rtl_altitude;
+
+    Location loc;
+    int32_t altitude_above_home_cm;
+    AC_DroneShowManager* show_manager = &copter.g2.drone_show_manager;
+
+    if (
+        show_manager->get_current_location(loc) &&
+        loc.get_alt_cm(Location::AltFrame::ABOVE_HOME, altitude_above_home_cm)
+    )
+    {
+        if (altitude_above_home_cm <= rtl_height * 1.1)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+/// hoppz
 
 bool ModeDroneShow::performing_completed() const
 {
@@ -776,6 +774,8 @@ bool ModeDroneShow::performing_completed() const
     return copter.g2.drone_show_manager.get_time_until_landing_sec() <= 0;
 }
 
+// starts the phase where we are landing at the place where we are, used at
+// the end of a show
 void ModeDroneShow::landing_start()
 {
     _set_stage(DroneShow_Landing);
@@ -784,54 +784,90 @@ void ModeDroneShow::landing_start()
     // close to our destination as possible
 
     // call regular land flight mode initialisation and ask it to ignore checks
-    copter.mode_land.init(/* ignore_checks = */ true);
+    // copter.mode_land.init(/* ignore_checks = */ true);
+
+    /// hoppz
+    float current_height = 0.0f;
+    copter.ahrs.get_relative_position_D_home(current_height);
+    gcs().send_text(MAV_SEVERITY_INFO, "[landing_start] get in , height:%.3f m, start loiter", -current_height);
+
+    copter.mode_loiter.init(true);
+    
+    // Record the start time for RTL delay
+    _landing_start_time_ms = AP_HAL::millis();
+    /// hoppz
 }
 
+// performs the landing stage
 void ModeDroneShow::landing_run()
 {
-    copter.mode_land.run();
+    // call regular land flight mode run function
+    // copter.mode_land.run();
 
-    if( landing_completed() ){
+    /// hoppz
+    copter.mode_loiter.run();
+
+    // Check if 500ms has elapsed since landing start
+    if (AP_HAL::millis() - _landing_start_time_ms >= 500) {
+        // 500ms has passed, start RTL
+        float current_height = 0.0f;
+        copter.ahrs.get_relative_position_D_home(current_height);
+        gcs().send_text(MAV_SEVERITY_INFO, "[landing_run]  height:%.3f m, start rtl", -current_height);
+        rtl_start();
+        return ;
+    }
+    /// hoppz
+
+    // if we have finished landing, move to the "landed" state
+    if (landing_completed()) {
         landed_start();
     }
 }
 
+// returns whether the landing operation has finished successfully. Must be called
+// from the landing stage only.
 bool ModeDroneShow::landing_completed() const
 {
-    if( _stage == DroneShow_Landing ) {
-        return(
+    if (_stage == DroneShow_Landing) {
+        return (
             copter.ap.land_complete && (
                 motors->get_spool_state() == AP_Motors::SpoolState::GROUND_IDLE ||
                 motors->get_spool_state() == AP_Motors::SpoolState::SHUT_DOWN
             )
-        ); 
+        );
     } else {
         return false;
     }
 }
 
-//* 当表演出问题的时候用这个返回 home position
+// starts the phase where we are returning to our home position, used during
+// aborted shows
 void ModeDroneShow::rtl_start()
 {
     _set_stage(DroneShow_RTL);
 
     // call regular RTL flight mode initialisation and ask it to ignore checks
-    copter.mode_rtl.init(/* ignore_checks =  */ true);
+    copter.mode_rtl.init(/* ignore_checks = */ true);
 }
 
+// performs the return to landing position stage
 void ModeDroneShow::rtl_run()
 {
+    // call regular rtl flight mode run function
     copter.mode_rtl.run(/* disarm_on_land = */ false);
 
-    if( rtl_completed() ){
+    // if we have finished landing, move to the "landed" state
+    if (rtl_completed()) {
         landed_start();
     }
 }
 
+// returns whether the RTL operation has finished successfully. Must be called
+// from the RTL stage only.
 bool ModeDroneShow::rtl_completed() const
 {
-    if( _stage == DroneShow_RTL ){
-        return(
+    if (_stage == DroneShow_RTL) {
+        return (
             copter.mode_rtl.state_complete() && 
             (copter.mode_rtl.state() == ModeRTL::SubMode::FINAL_DESCENT || copter.mode_rtl.state() == ModeRTL::SubMode::LAND) &&
             (motors->get_spool_state() == AP_Motors::SpoolState::GROUND_IDLE)
@@ -877,7 +913,7 @@ void ModeDroneShow::landed_run()
         AP::arming().disarm(AP_Arming::Method::SCRIPTING);
     }
 
-    //* 如果未来有开始的时间，直接进入下一个准备阶段
+    // If the start time of the show is moved to the future, start the
     // initialization process again
     if (has_start_time) {
         float time_until_start_sec = copter.g2.drone_show_manager.get_time_until_start_sec();
@@ -908,6 +944,101 @@ void ModeDroneShow::error_run()
     }
 }
 
+// Handler function that is called when the authorization state of the show has
+// changed in the drone show manager
+void ModeDroneShow::notify_authorization_changed()
+{
+    if (_stage == DroneShow_WaitForStartTime && copter.g2.drone_show_manager.has_authorization_to_start()) {
+        // Update home position and reset AGL to zero when the show is
+        // authorized and we are in the "waiting for start time" phase
+        try_to_update_home_position();
+    }
+}
+
+// Handler function that is called when the start time of the show has changed in the
+// drone show manager
+void ModeDroneShow::notify_start_time_changed()
+{
+    // Clear whether the preflight calibration was performed
+    _preflight_calibration_done = false;
+
+    // Clear whether the home position was set before takeoff
+    _home_position_set = false;
+}
+
+// Sends a guided mode command during the show performance, calculated from the
+// trajectory that the drone should follow
+bool ModeDroneShow::send_guided_mode_command_during_performance()
+{
+    AC_DroneShowManager::GuidedModeCommand command;
+
+    if (copter.g2.drone_show_manager.get_current_guided_mode_command_to_send(
+        command, get_default_yaw_cd(),
+        _altitude_locked_above_takeoff_altitude
+    )) {
+        copter.mode_guided.set_destination_posvelaccel(
+            command.pos, command.vel, command.acc,
+            /* use_yaw = */ true,
+            command.yaw_cd, /* [cd] */
+            /* use_yaw_rate = */ true,
+            command.yaw_rate_cds  /* [cd/s] */
+        );
+
+        if (command.unlock_altitude) {
+            _altitude_locked_above_takeoff_altitude = false;
+        }
+
+        copter.g2.drone_show_manager.notify_guided_mode_command_sent(command);
+
+        return true;
+    } else {
+        return false;
+    }
+}
+
+// Starts the motors before the show if they are not running already, irrespectively
+// of whether the drone is ready to perform the show or not.
+bool ModeDroneShow::start_motors_if_not_running()
+{
+    bool success = false;
+
+    if (AP::arming().is_armed()) {
+        // Already armed
+        success = true;
+    } else if (_prevent_arming_until_msec > AP_HAL::millis()) {
+        // Arming prevented because we have tried it recently
+    } else if (AP::arming().arm(AP_Arming::Method::SCRIPTING, /* do_arming_checks = */ true)) {
+        // Started motors successfully
+        success = true;
+    } else {
+        // Prearm checks failed; prevent another attempt for the next second
+        _prevent_arming_until_msec = AP_HAL::millis() + 1000;
+    }
+
+    return success;
+}
+
+// Starts the motors before the show if they are not running already, after
+// checking whether the drone is prepared to take off (according to the
+// show manager)
+bool ModeDroneShow::try_to_start_motors_if_prepared_to_take_off()
+{
+    return copter.g2.drone_show_manager.is_prepared_to_take_off() && start_motors_if_not_running();
+}
+
+// Tries to update the home position of the drone to its current location
+bool ModeDroneShow::try_to_update_home_position()
+{
+    _last_home_position_reset_attempt_at = AP_HAL::millis();
+
+    if (!is_disarmed_or_landed()) {
+        // Don't update home position if we might be flying
+        return false;
+    }
+
+    return copter.set_home_to_current_location(/* lock = */ false);
+}
+
 // Sets the stage of the drone show module and synchronizes it with the DroneShowManager
 void ModeDroneShow::_set_stage(DroneShowModeStage value)
 {
@@ -918,4 +1049,9 @@ void ModeDroneShow::_set_stage(DroneShowModeStage value)
 
     copter.g2.drone_show_manager.notify_drone_show_mode_entered_stage(_stage);
 }
+
+#else
+
+#error "You need to enable guided mode support to use the drone show mode."
+
 #endif

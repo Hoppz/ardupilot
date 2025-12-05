@@ -1,4 +1,4 @@
-#include "Copter.h"
+﻿#include "Copter.h"
 
 /*
  *       This event will be called when the failsafe changes
@@ -464,9 +464,8 @@ void Copter::set_mode_brake_or_land_with_pause(ModeReason reason)
 }
 
 bool Copter::should_disarm_on_failsafe() {
-    // 已经处于 arm 状态，但是还在等电机发动
     if (ap.in_arming_delay) {
-        return true;    // 返回 true 表示需要切换到 disarm
+        return true;
     }
 
     switch (flightmode->mode_number()) {
@@ -479,6 +478,7 @@ bool Copter::should_disarm_on_failsafe() {
             // if mission has not started AND vehicle is landed, disarm motors
             return !ap.auto_armed && ap.land_complete;
         case Mode::Number::DRONE_SHOW:
+            // if show has not started AND vehicle is landed, disarm motors
             return !ap.auto_armed && ap.land_complete;
         default:
             // used for AltHold, Guided, Loiter, RTL, Circle, Drift, Sport, Flip, Autotune, PosHold

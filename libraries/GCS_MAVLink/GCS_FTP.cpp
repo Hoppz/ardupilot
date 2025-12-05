@@ -48,7 +48,12 @@ bool GCS_MAVLINK::ftp_init(void) {
         return true;
     }
 
-    ftp.requests = new ObjectBuffer<pending_ftp>(5);
+    // ftp.requests = new ObjectBuffer<pending_ftp>(5); /// hoppz
+
+    /// hoppz
+    ftp.requests = new ObjectBuffer<pending_ftp>(20);
+    /// hoppz
+
     if (ftp.requests == nullptr || ftp.requests->get_size() == 0) {
         goto failed;
     }

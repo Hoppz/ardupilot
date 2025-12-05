@@ -436,7 +436,10 @@
 #endif
 
 #ifndef RTL_ALT_MIN
- # define RTL_ALT_MIN               200     // min height above ground for RTL (i.e 2m)
+//  # define RTL_ALT_MIN               200     // min height above ground for RTL (i.e 2m)
+/// hoppz
+# define RTL_ALT_MIN               10     // min height above ground for RTL (i.e 0.1m)
+/// hoppz
 #endif
 
 #ifndef RTL_CLIMB_MIN_DEFAULT

@@ -1,5 +1,4 @@
 #pragma once
-#pragma once
 
 /// @file   AC_HardFence.h
 /// @brief  Hard geofence with motor shutdown after a prolonged breach

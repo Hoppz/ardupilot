@@ -9,9 +9,8 @@
 #include "include/mavlink/v2.0/mavlink_types.h"
 
 /**
- * 将 RGB LED 的状态通过 MAVLink 消息发送到外部组件。
- * 与前面的调试版不同，这个类的输出通过 DEBUG_VECT 消息发送，而不是 STATUSTEXT 消息。
- * 它可以将 LED 的状态发送到任何支持 MAVLink 的外部设备或地面控制站。
+ * RGB LED implementation that sends the current state of the RGB LED as a
+ * DEBUG_VECT message on a MAVLink channel.
  */
 class DroneShowLED_MAVLink : public DroneShowLED {
 public:

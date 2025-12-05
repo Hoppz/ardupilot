@@ -44,6 +44,7 @@ void Copter::userhook_SuperSlowLoop()
     // copter.g2.drone_show_manager.send_drone_show_status(MAVLINK_COMM_0);
     // MAVLINK_COMM_0 是 usb 口, wifi 无法发出
     copter.g2.drone_show_manager.send_drone_show_status(MAVLINK_COMM_1);
+    // copter.g2.drone_show_manager.send_drone_show_status(MAVLINK_COMM_0);
 }
 #endif
 

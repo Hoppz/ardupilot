@@ -9,7 +9,8 @@
 #include "include/mavlink/v2.0/mavlink_types.h"
 
 /**
- * 整个函数的输出会被转发到 mavlink 中
+ * RGB LED implementation that sends the current state of the RGB LED as a
+ * STATUSTEXT message on all MAVLink channels.
  */
 class DroneShowLED_Debug : public DroneShowLED {
 public:

@@ -1,63 +1,67 @@
 #pragma once
 
+/// @file   AC_DroneShowLEDFactory.h
+/// @brief  LED factory class that creates LED instances for the drone show manager module
+
 #include "DroneShowLED.h"
 
-// 支持的 LED 类型
+// Supported LED types for the drone show manager
 enum DroneShowLEDType {
-
-    // 不使用 LED 输出
+    // No LED light output
     DroneShowLEDType_None = 0,
 
-    // 用于在 mavlink DEBUG_VECT 中输出 LED 的信息
+    // LED light color is sent in a DEBUG_VECT to a MAVLink channel
     DroneShowLEDType_MAVLink = 1,
 
-    // LED 输出发送到 NeoPixel LED 灯带
+    // LED light is to be forwarded to a NeoPixel LED strip
     DroneShowLEDType_NeoPixel = 2,
 
-    // LED 输出发送到 ProfiLED LED 灯带
+    // LED light is to be forwarded to a ProfiLED LED strip
     DroneShowLEDType_ProfiLED = 3,
 
-    // Debug 输出，LED 颜色用 Mavlink STATUSTEXT 消息输出
+    // Debug output; LED light RGB codes are sent as MAVLink STATUSTEXT messages
     DroneShowLEDType_Debug = 4,
 
-    // 模拟的 LED
+    // LED light color is to be forwarded to the SITL simulator
     DroneShowLEDType_SITL = 5,
 
-    // 连接在 servo 的 LED
+    // LED light is attached to servo channels
     DroneShowLEDType_Servo = 6,
 
-    // I2C 的 LED
+    // LED light is driven over an I2C bus with 3 bytes per transfer (RGB)
     DroneShowLEDType_I2C = 7,
 
-    // LED 输出与伺服通道关联，但具有反向极性
+    // LED light is attached to servo channels with inverted polarity
     DroneShowLEDType_InvertedServo = 8,
 
     // WGDrones LED
     DroneShowLEDType_WGDrones = 9,
 
-    // LED 输出发送到 NeoPixel RGBW LED 灯带
+    // LED light is to be forwarded to a NeoPixel RGBW LED strip
     DroneShowLEDType_NeoPixel_RGBW = 10,
 
-    // 四个字节（RGBW）的 I2C
+    // LED light is driven over an I2C bus with 4 bytes per transfer (RGBW)
     DroneShowLEDType_I2C_RGBW = 11,
 
-    // LED 由 ArduPilot 的 AP_Notify 框架控制
+    // LED light is driven by ArduPilot's AP_Notify framework
     DroneShowLEDType_Notify = 12,
 };
 
-
-// 根据指定的 LED 类型创建相应的 LED 实例
 class DroneShowLEDFactory
 {
-
 public:
     DroneShowLEDFactory();
 
+    /* Do not allow copies */
     DroneShowLEDFactory(const DroneShowLEDFactory &other) = delete;
     DroneShowLEDFactory &operator=(const DroneShowLEDFactory&) = delete;
 
+    /**
+     * Creates a new DroneShowLED instance, given the LED type, the channel
+     * index (if the LED type support multiple channels), and the number of
+     * LEDs on this channel (for NeoPixel or ProfiLED strips).
+     */
     DroneShowLED* new_rgb_led_by_type(
         DroneShowLEDType type, uint8_t channel, uint8_t num_leds
     );
-
 };

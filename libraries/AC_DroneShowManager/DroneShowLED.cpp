@@ -1,4 +1,5 @@
 #include <AP_Math/AP_Math.h>
+
 #include "DroneShowLED.h"
 
 void DroneShowLED::_update_gamma_lookup_table()

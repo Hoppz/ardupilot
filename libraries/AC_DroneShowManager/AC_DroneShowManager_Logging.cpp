@@ -2,7 +2,7 @@
 
 #include <AP_Logger/AP_Logger.h>
 
-// 将与无人机表演管理器相关的日志消息写入日志
+// Write a drone show status log entry
 void AC_DroneShowManager::write_log_message() const
 {
     sb_rgb_color_t color;

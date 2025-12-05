@@ -549,23 +549,6 @@ static const ap_message STREAM_EXTRA1_msgs[] = {
 static const ap_message STREAM_EXTRA2_msgs[] = {
     MSG_VFR_HUD
 };
-
-// /// hoppz add
-// static const ap_message STREAM_EXTRA3_msgs[] {
-//     MSG_SYS_STATUS,
-// #if AP_BATTERY_ENABLED
-//     MSG_BATTERY_STATUS,
-// #endif
-//     MSG_GPS_RAW,
-//     MSG_ATTITUDE,        // 只需要 LOCATION 里面的 heading 就可以了
-//     MSG_LOCATION,
-// #if COMPASS_CAL_ENABLED
-//     MSG_MAG_CAL_REPORT,
-//     MSG_MAG_CAL_PROGRESS,
-// #endif
-// };
-// /// hoppz add
-
 static const ap_message STREAM_EXTRA3_msgs[] = {
     MSG_AHRS,
     MSG_SYSTEM_TIME,
@@ -788,7 +771,6 @@ MAV_RESULT GCS_MAVLINK_Copter::handle_command_int_do_reposition(const mavlink_co
 #endif
 }
 
-//* 负责根据地面站（GCS）发送的命令，执行不同的命令
 MAV_RESULT GCS_MAVLINK_Copter::handle_command_int_packet(const mavlink_command_int_t &packet, const mavlink_message_t &msg)
 {
     switch(packet.command) {
@@ -1543,7 +1525,7 @@ void GCS_MAVLINK_Copter::handle_message(const mavlink_message_t &msg)
         copter.g2.toy_mode.handle_message(msg);
         break;
 #endif
-
+		
 #if MODE_DRONE_SHOW_ENABLED == ENABLED
     case MAVLINK_MSG_ID_DATA16:
     case MAVLINK_MSG_ID_DATA32:
@@ -1556,7 +1538,7 @@ void GCS_MAVLINK_Copter::handle_message(const mavlink_message_t &msg)
         }
         break;
 #endif
-        
+
     default:
         GCS_MAVLINK::handle_message(msg);
         break;
