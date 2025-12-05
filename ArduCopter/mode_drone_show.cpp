@@ -769,7 +769,7 @@ bool ModeDroneShow::check_reaching_rtl_altitude_ys()
     switch(status_flag){
         case 0:{
 
-            if (home_pos_command.pos.z >= 500.0f){
+            if (home_pos_command.pos.z >= g2.ze_star_alt_cm){
                 status_flag = 1;
                 gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] pos.z=: %f", home_pos_command.pos.z);
             }
@@ -778,7 +778,7 @@ bool ModeDroneShow::check_reaching_rtl_altitude_ys()
         }break;
         case 1:{
             
-            if (home_pos_command.pos.z <= 500.0f){
+            if (home_pos_command.pos.z <= g2.ze_star_alt_cm){
                 // status_flag = 2;
                 gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] pos.z=: %f", home_pos_command.pos.z);
                 return true;

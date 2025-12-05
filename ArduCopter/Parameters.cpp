@@ -1267,7 +1267,7 @@ const AP_Param::GroupInfo ParametersG2::var_info2[] = {
     // ID 62 is reserved for the AP_SUBGROUPEXTENSION
 
 #if MODE_DYNAMIC_RTL == ENABLE
-    AP_GROUPINFO("ZE_STAR_ALT_CM", 10, ParametersG2, ze_star_alt_cm, 100.0f),
+    AP_GROUPINFO("ZE_STAR_ALT_CM", 10, ParametersG2, ze_star_alt_cm, 800.0f),
 #endif
 
     AP_GROUPEND
