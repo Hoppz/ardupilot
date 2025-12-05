@@ -42,6 +42,9 @@ enum DroneShowModeStage {
     DroneShow_Landing,
     DroneShow_Landed,
     DroneShow_Error,
+// #if MODE_DYNAMIC_RTL == ENABLE
+    Dynamic_Rtl,
+// #endif
 };
 
 // Enum representing the flags in the control mode bitmasp
@@ -302,10 +305,6 @@ public:
     // Returns the altitude to take off to above the current position of the drone, in centimeters
     int32_t get_takeoff_altitude_cm() const { return _params.takeoff_altitude_m * 100.0f; }
 
-    /// hoppz
-    // int32_t get_switch_rtl_altitude_cm() const { return _params.switch_rtl_altitude_m * 100.0f; }
-    /// hoppz
-
     // Returns the takeoff speed in meters per second
     float get_takeoff_speed_m_s() const {
         float result = _wp_nav ? _wp_nav->get_default_speed_up() / 100.0f : 0;
@@ -554,11 +553,6 @@ private:
 
         // Time synchronization mode
         AP_Int8 time_sync_mode;
-
-        /// hoppz
-        // altitude switch rtl mode when landing
-        // AP_Float switch_rtl_altitude_m;
-        /// hoppz
 
         struct {
             // Specifies where the a given LED light channel of the show should be sent

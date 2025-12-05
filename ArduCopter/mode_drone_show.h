@@ -146,9 +146,17 @@ private:
     void performing_run();
     bool performing_completed() const;
 
-    /// hoppz 
-    bool hoppz_check_reaching_rtl_altitude();
-    /// hoppz
+    /*=============Serein_Y===========================*/
+#if MODE_DYNAMIC_RTL == ENABLE
+
+    uint8_t status_flag;
+    
+    Vector3f home_pos_cm;
+
+    bool check_reaching_rtl_altitude_ys();
+
+#endif
+/*=============Serein_Y===========================*/
 
     void landing_start();
     void landing_run();

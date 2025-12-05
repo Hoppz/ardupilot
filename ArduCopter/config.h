@@ -187,6 +187,12 @@
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
+// ZHIER Drone show
+#ifndef MODE_DYNAMIC_RTL
+# define MODE_DYNAMIC_RTL ENABLED
+#endif
+
+//////////////////////////////////////////////////////////////////////////////
 // Drone show - perform a timed waypoint flight with LED lights
 #ifndef MODE_DRONE_SHOW_ENABLED
 # define MODE_DRONE_SHOW_ENABLED ENABLED

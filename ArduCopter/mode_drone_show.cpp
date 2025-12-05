@@ -2,6 +2,10 @@
 
 #include <skybrush/colors.h>
 
+#if MODE_DYNAMIC_RTL == ENABLE
+    #include <AP_AHRS/AP_AHRS.h>
+#endif
+
 #if MODE_GUIDED_ENABLED == ENABLED
 
 /*
@@ -174,6 +178,10 @@ void ModeDroneShow::run()
     case DroneShow_Error:
         // failed to start a show
         error_run();
+        break;
+
+    case Dynamic_Rtl:
+        copter.set_mode(Mode::Number::DYNAMIC_RTL, ModeReason::MISSION_END);
         break;
 
     default:
@@ -351,6 +359,17 @@ void ModeDroneShow::wait_for_start_time_start()
 
     // Reset home position to current location
     try_to_update_home_position();
+
+
+#if MODE_DYNAMIC_RTL == ENABLE
+    // 获取当前位置
+    home_pos_cm = inertial_nav.get_position_neu_cm();
+
+    g2.home_pos_x_cm.set(home_pos_cm.x);
+    g2.home_pos_y_cm.set(home_pos_cm.y);
+    g2.home_pos_y_cm.set(home_pos_cm.y);
+    gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] home_pos_cm: %f, %f, %f", home_pos_cm.x, home_pos_cm.y, home_pos_cm.z);    
+#endif
 }
 
 // waits for the start time of the show
@@ -708,6 +727,13 @@ void ModeDroneShow::performing_run()
     uint32_t now = AP_HAL::millis();
     uint32_t target_dt = copter.g2.drone_show_manager.get_controller_update_delta_msec();
 
+    if (check_reaching_rtl_altitude_ys()){
+        _set_stage(Dynamic_Rtl);
+        gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] DYNAMIC_RTL start!");
+        copter.set_mode(Mode::Number::DYNAMIC_RTL, ModeReason::MISSION_END);
+        exited_mode = 1;
+    }
+
     if (now - last_guided_command >= target_dt) {
         if (!send_guided_mode_command_during_performance()) {
             // Failed to send guided mode command; try to switch to position
@@ -732,40 +758,105 @@ void ModeDroneShow::performing_run()
         // error stage. This typically happens if we crash during a show.
         gcs().send_text(MAV_SEVERITY_CRITICAL, "Motors disarmed during show");
         error_start();
-    } else if (hoppz_check_reaching_rtl_altitude() || performing_completed()) {
+    } else if (performing_completed()) {
         // if we have finished the show, land
         landing_start();
     }
 }
 
-/// hoppz
-/// 用于在降落的时候切换到 RTL 模式, 
-// TODO(hoppz): 在整个表演的过程中会一直检测, 这种方式可能不太合理
-bool ModeDroneShow::hoppz_check_reaching_rtl_altitude()
+/*===========================Serein_Y===========================*/
+
+#if MODE_DYNAMIC_RTL == ENABLE
+
+bool ModeDroneShow::check_reaching_rtl_altitude_ys()
 {
-    // TODO(hoppz): 当前的 rtl 高度参数以及 rtl 的返航
-    //     重新写一个模式，以及参数，不要影响 ardupilot 正常工作
+    AC_DroneShowManager::GuidedModeCommand home_pos_command;
+    // 原点位置
+    // if (!AP::ahrs().get_relative_position_NED_home(home_pos_command.pos)) {
+    //     gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] ERROR:get_relative_position_NED_home Failed!");
+    //     return false;
+    // }
+    home_pos_command.pos = inertial_nav.get_position_neu_cm();
+    // gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] home__pos_m: x=%f y=%f z=%f\r\n", home_pos_command.pos.x, home_pos_command.pos.y, home_pos_command.pos.z);
 
-    // int32_t rtl_height = copter.g2.drone_show_manager.get_switch_rtl_altitude_cm(); ///< 当前切换到 rtl 的高度
-    int32_t rtl_height = copter.g.rtl_altitude;
+    switch(status_flag){
+        case 0:{
 
-    Location loc;
-    int32_t altitude_above_home_cm;
-    AC_DroneShowManager* show_manager = &copter.g2.drone_show_manager;
+            if (home_pos_command.pos.z >= 500.0f){
+                status_flag = 1;
+                gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] status_flag: %d", status_flag);
+            }
 
-    if (
-        show_manager->get_current_location(loc) &&
-        loc.get_alt_cm(Location::AltFrame::ABOVE_HOME, altitude_above_home_cm)
-    )
-    {
-        if (altitude_above_home_cm <= rtl_height * 1.1)
-        {
+            return false;
+            }break;
+        case 1:{
+            
+            if (home_pos_command.pos.z <= 500.0f){
+                // status_flag = 2;
+                return true;
+                gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] status_flag: %d", status_flag);
+            }
+
+            return false;
+            }break;
+        case 2:{
+            landing_start();
             return true;
-        }
+            Vector3f current_pos = inertial_nav.get_position_neu_cm();  // 当前位置
+            gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] neu___pos_cm: %f, %f, %f", current_pos.x, current_pos.y, current_pos.z);
+            
+            float control_v_a = 2.0f; // m/s
+            // home_pos_command.pos.x = abs(home_pos_command.pos.x - current_pos.x*0.01f);
+            // home_pos_command.pos.y = abs(home_pos_command.pos.y - current_pos.y*0.01f);
+            // home_pos_command.pos.z = abs(home_pos_command.pos.z + current_pos.z*0.01f);
+            home_pos_command.pos.z = -home_pos_command.pos.z;
+            home_pos_command.vel = Vector3f(control_v_a,control_v_a,control_v_a);
+            home_pos_command.acc = Vector3f(control_v_a,control_v_a,control_v_a/2.0f);
+            home_pos_command.yaw_rate_cds = 0;
+
+            float yaw_rad = AP::ahrs().get_yaw();
+            constexpr float rad_to_cd_multiplier = (180.0f / M_PI) * 100.0f;
+            home_pos_command.yaw_cd = (int32_t)roundf(yaw_rad * rad_to_cd_multiplier);
+            
+            copter.mode_guided.set_destination_posvelaccel(
+                home_pos_command.pos, home_pos_command.vel, home_pos_command.acc,
+                /* use_yaw = */ true,
+                home_pos_command.yaw_cd,
+                /* use_yaw_rate = */ false,
+                home_pos_command.yaw_rate_cds
+            );
+
+            Vector3f target_pos = copter.mode_guided.get_target_pos().tofloat();  // 获取目标位置
+            gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] target_pos_m: %f, %f, %f", target_pos.x, target_pos.y, target_pos.z);
+
+
+            _altitude_locked_above_takeoff_altitude = false;
+            copter.g2.drone_show_manager.notify_guided_mode_command_sent(home_pos_command);
+            
+            // gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y]get_wp_distance_to_destination: %f", wp_nav->get_wp_distance_to_destination());
+            if (wp_nav->get_wp_distance_to_destination() <= 10) {
+                status_flag = 3;
+                gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y]status_flag: %d", status_flag);
+                gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] home_pos_command: x=%f y=%f z=%f\r\n", 
+                    home_pos_command.pos.x, home_pos_command.pos.y, home_pos_command.pos.z);
+            }
+            }break;
+        case 3:{
+            status_flag = 4;
+            gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y]run default: %d", status_flag);
+            }break;
+        default:{
+            status_flag = 0;
+            gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y]run default: %d", status_flag);
+            return false;
+            }break;
     }
-    return false;
+    return true;
+
 }
-/// hoppz
+
+/*===========================Serein_Y===========================*/
+#endif
 
 bool ModeDroneShow::performing_completed() const
 {
@@ -784,46 +875,21 @@ void ModeDroneShow::landing_start()
     // close to our destination as possible
 
     // call regular land flight mode initialisation and ask it to ignore checks
-    // copter.mode_land.init(/* ignore_checks = */ true);
-
-    /// hoppz
-    float current_height = 0.0f;
-    copter.ahrs.get_relative_position_D_home(current_height);
-    gcs().send_text(MAV_SEVERITY_INFO, "[landing_start] get in , height:%.3f m, start loiter", -current_height);
-
-    copter.mode_loiter.init(true);
-    
-    // Record the start time for RTL delay
-    _landing_start_time_ms = AP_HAL::millis();
-    /// hoppz
+    copter.mode_land.init(/* ignore_checks = */ true);
 }
+
 
 // performs the landing stage
 void ModeDroneShow::landing_run()
 {
     // call regular land flight mode run function
-    // copter.mode_land.run();
-
-    /// hoppz
-    copter.mode_loiter.run();
-
-    // Check if 500ms has elapsed since landing start
-    if (AP_HAL::millis() - _landing_start_time_ms >= 500) {
-        // 500ms has passed, start RTL
-        float current_height = 0.0f;
-        copter.ahrs.get_relative_position_D_home(current_height);
-        gcs().send_text(MAV_SEVERITY_INFO, "[landing_run]  height:%.3f m, start rtl", -current_height);
-        rtl_start();
-        return ;
-    }
-    /// hoppz
-
+    copter.mode_land.run();
+    gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y]run mode_land");
     // if we have finished landing, move to the "landed" state
     if (landing_completed()) {
         landed_start();
     }
 }
-
 // returns whether the landing operation has finished successfully. Must be called
 // from the landing stage only.
 bool ModeDroneShow::landing_completed() const

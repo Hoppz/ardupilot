@@ -95,9 +95,10 @@ public:
         AUTOROTATE =   26,  // Autonomous autorotation
         AUTO_RTL =     27,  // Auto RTL, this is not a true mode, AUTO will report as this mode if entered to perform a DO_LAND_START Landing sequence
         TURTLE =       28,  // Flip over after crash
-
+        
         // Mode number 127 reserved for the "drone show mode" in the Skybrush
         // fork at https://github.com/skybrush-io/ardupilot
+        DYNAMIC_RTL =  108,
         DRONE_SHOW =   127, // Pre-programmed drone light show
     };
 
@@ -1152,6 +1153,42 @@ private:
 
 };
 
+/*===========================Serein_Y===========================*/
+
+
+class ModeDynamicRtl : public Mode {
+public:
+    // inherit constructor
+    using Mode::Mode;
+    Number mode_number() const override { return Number::DYNAMIC_RTL; }
+    bool init(bool ignore_checks) override;
+    void run() override;
+
+    bool requires_GPS() const override { return true; }  // 此模式需要有GPS定位
+    bool has_manual_throttle() const override { return false; }  // 此模式不允许手动控制油门
+    bool in_guided_mode() const override { return true; }  // 此模式是一种引导的模式
+    //bool allows_arming(AP_Arming::Method method) const override;
+    //bool allows_arming(bool from_gcs) const override { return false; }  // 不允许在此模式下解锁
+    bool allows_arming(AP_Arming::Method method) const override { return false; };
+    bool is_autopilot() const override { return true; }  // 此模式为自动飞行控制
+    bool has_user_takeoff(bool must_navigate) const override { return false; }  // 不允许在此模式下直接起飞（必须是在空中切到此模式）
+    uint32_t get_timeout_ms() const;
+protected:
+
+    const char *name() const override { return "DRAW_STAR"; }
+    const char *name4() const override { return "STAR"; }
+
+private:
+    Vector3f path_ys[10];  // 航点数组
+    int path_num_ys;  // 当前航点号
+
+    void generate_path();  // 生成航线
+    void pos_control_start();  // 开始位置控制
+    void pos_control_run();  // 位置控制周期调用函数
+
+};
+
+/*===========================Serein_Y===========================*/
 
 class ModeGuidedNoGPS : public ModeGuided {
 
