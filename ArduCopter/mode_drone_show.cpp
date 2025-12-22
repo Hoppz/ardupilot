@@ -364,6 +364,11 @@ void ModeDroneShow::wait_for_start_time_start()
     status_flag = 0;
     Vector3f home_pos_command;
     home_pos_command = inertial_nav.get_position_neu_cm();
+
+    g2.ze_star_x_cm.set(home_pos_command.x);
+    g2.ze_star_y_cm.set(home_pos_command.y);
+    g2.ze_star_z_cm.set(home_pos_command.z);
+
     gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] x: %f, y: %f, z: %f", home_pos_command.x, home_pos_command.y, home_pos_command.z);
 #endif
 

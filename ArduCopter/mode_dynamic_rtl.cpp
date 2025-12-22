@@ -17,7 +17,12 @@ void ModeDynamicRtl::initialization_start()
     if(!AP::ahrs().get_relative_position_NED_home((path_ys[0]))){
         gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] ERROR:generate_path\r\n");
     }
+
+    path_ys[0].x = g2.ze_star_x_cm - path_ys[0].x;
+    path_ys[0].y = g2.ze_star_x_cm - path_ys[0].y;
     path_ys[0].z = 400.0f;
+
+    gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] x: %f, y: %f, z: %f", path_ys[0].x, path_ys[0].y, path_ys[0].z);
 
     wp_nav->wp_and_spline_init();
     wp_nav->set_wp_destination(path_ys[0], false);
