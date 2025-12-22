@@ -359,6 +359,14 @@ void ModeDroneShow::wait_for_start_time_start()
 
     // Reset home position to current location
     try_to_update_home_position();
+
+#if MODE_DYNAMIC_RTL == ENABLE
+    status_flag = 0;
+    Vector3f home_pos_command;
+    home_pos_command = inertial_nav.get_position_neu_cm();
+    gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] x: %f, y: %f, z: %f", home_pos_command.x, home_pos_command.y, home_pos_command.z);
+#endif
+
 }
 
 // waits for the start time of the show
@@ -771,16 +779,19 @@ bool ModeDroneShow::check_reaching_rtl_altitude_ys()
 
             if (home_pos_command.pos.z >= g2.ze_star_alt_cm){
                 status_flag = 1;
-                gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] pos.z=: %f", home_pos_command.pos.z);
+                gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] First x: %f, y: %f, z: %f", 
+                    home_pos_command.pos.x, home_pos_command.pos.y, home_pos_command.pos.z);
             }
 
             return false;
         }break;
         case 1:{
             
-            if (home_pos_command.pos.z <= g2.ze_star_alt_cm){
+            if (home_pos_command.pos.z <= g2.ze_star_alt_cm - 50.f){
                 // status_flag = 2;
-                gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] pos.z=: %f", home_pos_command.pos.z);
+                gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] LAND x: %f, y: %f, z: %f", 
+                    home_pos_command.pos.x, home_pos_command.pos.y, home_pos_command.pos.z);
+
                 return true;
             }
 
@@ -788,13 +799,13 @@ bool ModeDroneShow::check_reaching_rtl_altitude_ys()
         }break;
         default:{
             status_flag = 0;
-                gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] pos.z=: %f", home_pos_command.pos.z);
+                gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] Default x: %f, y: %f, z: %f", 
+                    home_pos_command.pos.x, home_pos_command.pos.y, home_pos_command.pos.z);
             return false;
         }break;
     }
     return true;
 }
-
 
 /*===========================Serein_Y===========================*/
 #endif
