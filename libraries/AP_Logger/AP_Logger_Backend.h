@@ -76,6 +76,7 @@ public:
     virtual void get_log_boundaries(uint16_t list_entry, uint32_t & start_page, uint32_t & end_page) = 0;
     virtual void get_log_info(uint16_t list_entry, uint32_t &size, uint32_t &time_utc) = 0;
     virtual int16_t get_log_data(uint16_t list_entry, uint16_t page, uint32_t offset, uint16_t len, uint8_t *data) = 0;
+    virtual void end_log_transfer() = 0;
     virtual uint16_t get_num_logs() = 0;
     virtual uint16_t find_oldest_log();
 
@@ -123,6 +124,8 @@ public:
     uint8_t num_multipliers() const;
     const struct MultiplierStructure *multiplier(uint8_t multiplier) const;
 
+    bool Write_RTC();
+
     bool Write_EntireMission();
     bool Write_RallyPoint(uint8_t total,
                           uint8_t sequence,
@@ -138,8 +141,10 @@ public:
     }
     bool Write_Message(const char *message);
     bool Write_MessageF(const char *fmt, ...);
+    bool Write_MessageChunk(uint8_t id, const char *messagechunk, uint8_t chunk_seq);
     bool Write_Mission_Cmd(const AP_Mission &mission,
-                               const AP_Mission::Mission_Command &cmd);
+                           const AP_Mission::Mission_Command &cmd,
+                           LogMessages id);
     bool Write_Mode(uint8_t mode, const ModeReason reason);
     bool Write_Parameter(const char *name, float value, float default_val);
     bool Write_Parameter(const AP_Param *ap,
@@ -166,7 +171,7 @@ public:
     // values contained in arg_list:
     bool Write(uint8_t msg_type, va_list arg_list, bool is_critical=false, bool is_streaming=false);
 
-    // these methods are used when reporting system status over mavlink
+    // these methods are used for mavlink system status and arming checks
     virtual bool logging_enabled() const;
     virtual bool logging_failed() const = 0;
 
@@ -273,6 +278,7 @@ private:
     bool emit_format_for_type(LogMessages a_type);
     Bitmask<256> _formats_written;
 
+    uint8_t msg_id;  // the ID of the next MSG message that will be logged
 };
 
 #endif  // HAL_LOGGING_ENABLED

@@ -50,6 +50,7 @@ public:
     void get_log_boundaries(uint16_t log_num, uint32_t & start_page, uint32_t & end_page) override {}
     void get_log_info(uint16_t log_num, uint32_t &size, uint32_t &time_utc) override {}
     int16_t get_log_data(uint16_t log_num, uint16_t page, uint32_t offset, uint16_t len, uint8_t *data) override { return 0; }
+    void end_log_transfer() override { };
     uint16_t get_num_logs(void) override { return 0; }
 
     void remote_log_block_status_msg(const GCS_MAVLINK &link, const mavlink_message_t& msg) override;
@@ -112,7 +113,7 @@ private:
         uint8_t state_sent_max;
     } stats;
 
-    // this method is used when reporting system status over mavlink
+    // these methods are used for mavlink system status and arming checks
     bool logging_enabled() const override { return true; }
     bool logging_failed() const override;
 
@@ -138,7 +139,7 @@ private:
     uint8_t _next_block_number_to_resend;
     bool _sending_to_client;
 
-    void Write_logger_MAV(AP_Logger_MAVLink &logger);
+    void Write_DMS(AP_Logger_MAVLink &logger);
 
     uint32_t bufferspace_available() override; // in bytes
     uint8_t remaining_space_in_current_block() const;

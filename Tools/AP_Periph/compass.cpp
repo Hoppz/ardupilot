@@ -1,6 +1,6 @@
 #include "AP_Periph.h"
 
-#ifdef HAL_PERIPH_ENABLE_MAG
+#if AP_PERIPH_MAG_ENABLED
 
 /*
   magnetometer support
@@ -70,7 +70,7 @@ void AP_Periph_FW::can_mag_update(void)
         pkt.magnetic_field_ga[i] = field_Ga[i];
     }
     
-    uint8_t buffer[UAVCAN_EQUIPMENT_AHRS_MAGNETICFIELDSTRENGTH_MAX_SIZE] {};
+    uint8_t buffer[UAVCAN_EQUIPMENT_AHRS_MAGNETICFIELDSTRENGTH_MAX_SIZE];
     uint16_t total_size = uavcan_equipment_ahrs_MagneticFieldStrength_encode(&pkt, buffer, !periph.canfdout());
 
     canard_broadcast(UAVCAN_EQUIPMENT_AHRS_MAGNETICFIELDSTRENGTH_SIGNATURE,
@@ -86,7 +86,7 @@ void AP_Periph_FW::can_mag_update(void)
         pkt.magnetic_field_ga[i] = field_Ga[i];
     }
     
-    uint8_t buffer[DRONECAN_SENSORS_MAGNETOMETER_MAGNETICFIELDSTRENGTHHIRES_MAX_SIZE] {};
+    uint8_t buffer[DRONECAN_SENSORS_MAGNETOMETER_MAGNETICFIELDSTRENGTHHIRES_MAX_SIZE];
     uint16_t total_size = dronecan_sensors_magnetometer_MagneticFieldStrengthHiRes_encode(&pkt, buffer, !periph.canfdout());
 
     canard_broadcast(DRONECAN_SENSORS_MAGNETOMETER_MAGNETICFIELDSTRENGTHHIRES_SIGNATURE,
@@ -97,4 +97,4 @@ void AP_Periph_FW::can_mag_update(void)
 #endif // AP_PERIPH_MAG_HIRES
 }
 
-#endif // HAL_PERIPH_ENABLE_MAG
+#endif // AP_PERIPH_MAG_ENABLED

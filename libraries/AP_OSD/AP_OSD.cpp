@@ -457,7 +457,7 @@ void AP_OSD::update_stats()
             home_loc = ahrs.get_home();
         }
         ahrs.get_relative_position_D_home(alt);
-        have_airspeed_estimate = ahrs.airspeed_estimate(aspd_mps);
+        have_airspeed_estimate = ahrs.airspeed_EAS(aspd_mps);
     }
     float speed = v.length();
     if (speed < 0.178) {
@@ -506,7 +506,7 @@ void AP_OSD::update_stats()
     // max esc temp
     AP_ESC_Telem& telem = AP::esc_telem();
     int16_t highest_temperature = 0;
-    telem.get_highest_motor_temperature(highest_temperature);
+    telem.get_highest_temperature(highest_temperature);
     _stats.max_esc_temp = MAX(_stats.max_esc_temp, highest_temperature);
 #endif
 }

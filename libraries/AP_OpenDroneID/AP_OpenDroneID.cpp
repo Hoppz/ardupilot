@@ -68,7 +68,7 @@ const AP_Param::GroupInfo AP_OpenDroneID::var_info[] = {
     // @Param: OPTIONS
     // @DisplayName: OpenDroneID options
     // @Description: Options for OpenDroneID subsystem
-    // @Bitmask: 0:EnforceArming, 1:AllowNonGPSPosition, 2:LockUASIDOnFirstBasicIDRx
+    // @Bitmask: 0:EnforcePreArmChecks, 1:AllowNonGPSPosition, 2:LockUASIDOnFirstBasicIDRx
     AP_GROUPINFO("OPTIONS", 4, AP_OpenDroneID, _options, 0),
 
     // @Param: BARO_ACC
@@ -162,8 +162,13 @@ bool AP_OpenDroneID::pre_arm_check(char* failmsg, uint8_t failmsg_len)
 {
     WITH_SEMAPHORE(_sem);
 
-    if (!option_enabled(Options::EnforceArming)) {
+    if (!option_enabled(Options::EnforcePreArmChecks)) {
         return true;
+    }
+
+    if(_enable == 0) {
+        strncpy(failmsg, "DID_ENABLE must be 1", failmsg_len);
+        return false;
     }
 
     if (pkt_basic_id.id_type == MAV_ODID_ID_TYPE_NONE) {

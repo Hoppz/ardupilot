@@ -533,8 +533,7 @@ TEST(MathWrapTest, AnglePI)
     EXPECT_NEAR(0.f,     wrap_PI(M_2PI),     accuracy);
     EXPECT_NEAR(0,       wrap_PI(M_PI * 10), accuracy);
     EXPECT_NEAR(-2.1415925025939941f,    wrap_PI(M_PI+1),      accuracy);
-    EXPECT_NEAR(1.f,     wrap_PI(1),     accuracy);
-    EXPECT_NEAR(1.f,     wrap_PI((short)1),     accuracy);
+    EXPECT_NEAR(1.f,     wrap_PI(1.0),     accuracy);
 }
 
 TEST(MathWrapTest, Angle2PI)
@@ -547,8 +546,7 @@ TEST(MathWrapTest, Angle2PI)
     EXPECT_NEAR(0.f,  wrap_2PI(0.f), accuracy);
     EXPECT_NEAR(M_PI, wrap_2PI(-M_PI), accuracy);
     EXPECT_NEAR(0,    wrap_2PI(-M_2PI), accuracy);
-    EXPECT_NEAR(1,    wrap_2PI(1), accuracy);
-    EXPECT_NEAR(1,    wrap_2PI((short)1), accuracy);
+    EXPECT_NEAR(1,    wrap_2PI(1.0), accuracy);
 }
 
 TEST(MathTest, ASin)
@@ -652,6 +650,23 @@ TEST(MathTest, RANDOM16)
 {
     static const uint16_t random_value = get_random16();
     EXPECT_NE(random_value, get_random16());
+}
+
+TEST(MathTest, RAND_FLOAT)
+{
+    // bodgy range checks
+    float lowest_value = 0;
+    float highest_value = 0;
+    for (auto i=0; i<1000; i++) {
+        const auto value = rand_float();
+        lowest_value = MIN(lowest_value, value);
+        highest_value = MAX(highest_value, value);
+    }
+    EXPECT_NEAR(-0.95, lowest_value, 0.05);
+    EXPECT_NEAR(0.95, highest_value, 0.05);
+    EXPECT_GE(lowest_value, -1.0);
+    EXPECT_LE(highest_value, 1.0);
+
 }
 
 TEST(MathTest, VELCORRECTION)

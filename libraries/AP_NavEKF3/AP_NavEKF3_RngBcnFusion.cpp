@@ -3,6 +3,8 @@
 
 #if EK3_FEATURE_BEACON_FUSION
 
+#include <AP_DAL/AP_DAL.h>
+
 // initialise state:
 void NavEKF3_core::BeaconFusion::InitialiseVariables()
 {
@@ -40,7 +42,7 @@ void NavEKF3_core::BeaconFusion::InitialiseVariables()
     delete[] fusionReport;
     fusionReport = nullptr;
     numFusionReports = 0;
-    auto *beacon = AP::dal().beacon();
+    auto *beacon = dal.beacon();
     if (beacon != nullptr) {
         const uint8_t count = beacon->count();
         fusionReport = NEW_NOTHROW BeaconFusion::FusionReport[count];
@@ -65,7 +67,7 @@ void NavEKF3_core::SelectRngBcnFusion()
     // Determine if we need to fuse range beacon data on this time step
     if (rngBcn.dataToFuse) {
         if (PV_AidingMode == AID_ABSOLUTE) {
-            if ((frontend->sources.getPosXYSource() == AP_NavEKF_Source::SourceXY::BEACON) && rngBcn.alignmentCompleted) {
+            if ((frontend->sources.getPosXYSource(core_index) == AP_NavEKF_Source::SourceXY::BEACON) && rngBcn.alignmentCompleted) {
                 if (!rngBcn.originEstInit) {
                     rngBcn.originEstInit = true;
                     rngBcn.posOffsetNED.x = rngBcn.receiverPos.x - stateStruct.position.x;
@@ -258,29 +260,20 @@ void NavEKF3_core::FuseRngBcn()
             // restart the counter
             rngBcn.lastPassTime_ms = imuSampleTime_ms;
 
-            // correct the covariance P = (I - K*H)*P
-            // take advantage of the empty columns in KH to reduce the
-            // number of operations
+            // correct the covariance P = (I - K*H)*P = P - K*H*P. take advantage of
+            // the zero elements of H to reduce the number of operations.
             for (unsigned i = 0; i<=stateIndexLim; i++) {
-                for (unsigned j = 0; j<=6; j++) {
-                    KH[i][j] = 0.0f;
-                }
-                for (unsigned j = 7; j<=9; j++) {
-                    KH[i][j] = Kfusion[i] * H_BCN[j];
-                }
-                for (unsigned j = 10; j<=23; j++) {
-                    KH[i][j] = 0.0f;
-                }
-            }
-            for (unsigned j = 0; j<=stateIndexLim; j++) {
-                for (unsigned i = 0; i<=stateIndexLim; i++) {
+                // j as the inner loop allows the compiler to hoist the KH product
+                // to save computation, and do the inner indexing more efficiently.
+                for (unsigned j = 0; j<=stateIndexLim; j++) {
                     ftype res = 0;
-                    res += KH[i][7] * P[7][j];
-                    res += KH[i][8] * P[8][j];
-                    res += KH[i][9] * P[9][j];
+                    res += (Kfusion[i] * H_BCN[7]) * P[7][j];
+                    res += (Kfusion[i] * H_BCN[8]) * P[8][j];
+                    res += (Kfusion[i] * H_BCN[9]) * P[9][j];
                     KHP[i][j] = res;
                 }
             }
+
             // Check that we are not going to drive any variances negative and skip the update if so
             bool healthyFusion = true;
             for (uint8_t i= 0; i<=stateIndexLim; i++) {
@@ -505,18 +498,16 @@ void NavEKF3_core::FuseRngBcnStatic()
             rngBcn.receiverPos.y -= K_RNG[1] * rngBcn.innov;
             rngBcn.receiverPos.z -= K_RNG[2] * rngBcn.innov;
 
-            // calculate the covariance correction
+            // correct the covariance P = (I - K*H)*P = P - K*H*P. take advantage of
+            // the zero elements of H to reduce the number of operations.
             for (unsigned i = 0; i<=2; i++) {
+                // j as the inner loop allows the compiler to hoist the KH product
+                // to save computation, and do the inner indexing more efficiently.
                 for (unsigned j = 0; j<=2; j++) {
-                    KH[i][j] = K_RNG[i] * H_RNG[j];
-                }
-            }
-            for (unsigned j = 0; j<=2; j++) {
-                for (unsigned i = 0; i<=2; i++) {
                     ftype res = 0;
-                    res += KH[i][0] * rngBcn.receiverPosCov[0][j];
-                    res += KH[i][1] * rngBcn.receiverPosCov[1][j];
-                    res += KH[i][2] * rngBcn.receiverPosCov[2][j];
+                    res += (K_RNG[i] * H_RNG[0]) * rngBcn.receiverPosCov[0][j];
+                    res += (K_RNG[i] * H_RNG[1]) * rngBcn.receiverPosCov[1][j];
+                    res += (K_RNG[i] * H_RNG[2]) * rngBcn.receiverPosCov[2][j];
                     KHP[i][j] = res;
                 }
             }

@@ -34,6 +34,8 @@ class EDNEmit(Emit):
 
     def emit(self, g):
         for param in g.params:
+            if not self.should_emit_param(param):
+                continue
             output_dict = dict()
             # lowercase all keywords
             for key in param.__dict__.keys():
@@ -49,6 +51,9 @@ class EDNEmit(Emit):
             # remove any keys we don't really care to share
             for key in self.remove_keys:
                 output_dict.pop(key, None)
+            for key in list(output_dict.keys()):
+                if not self.should_emit_field(param, key):
+                    output_dict.pop(key, None)
 
             # rearrange bitmasks to be a vector with nil's if the bit doesn't have meaning
             if "bitmask" in output_dict:

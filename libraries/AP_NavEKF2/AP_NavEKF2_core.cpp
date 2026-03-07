@@ -1,8 +1,10 @@
+#include "AP_NavEKF2_core.h"
+
 #include <AP_HAL/AP_HAL.h>
+#include <AP_DAL/AP_DAL.h>
+#include <GCS_MAVLink/GCS.h>
 
 #include "AP_NavEKF2.h"
-#include "AP_NavEKF2_core.h"
-#include <GCS_MAVLink/GCS.h>
 
 extern const AP_HAL::HAL& hal;
 
@@ -28,10 +30,13 @@ extern const AP_HAL::HAL& hal;
  */
 #define ENABLE_EKF_TIMING 0
 
+NavEKF2_core::Matrix24 NavEKF2_core::KH;
+NavEKF2_core::Matrix24 NavEKF2_core::nextP;
+
 // constructor
 NavEKF2_core::NavEKF2_core(NavEKF2 *_frontend) :
-    frontend(_frontend),
-    dal(AP::dal())
+    dal(AP::dal()),
+    frontend(_frontend)
 {
 }
 
@@ -541,6 +546,10 @@ void NavEKF2_core::UpdateFilter(bool predict)
 #endif
 
     fill_scratch_variables();
+#if CONFIG_HAL_BOARD == HAL_BOARD_SITL
+    fill_nanf(&KH[0][0], sizeof(KH)/sizeof(ftype)); // see fill_scratch_variables()
+    fill_nanf(&nextP[0][0], sizeof(nextP)/sizeof(ftype));
+#endif
 
     // TODO - in-flight restart method
 
