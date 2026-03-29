@@ -359,19 +359,6 @@ void ModeDroneShow::wait_for_start_time_start()
 
     // Reset home position to current location
     try_to_update_home_position();
-
-#if MODE_DYNAMIC_RTL == ENABLE
-    status_flag = 0;
-    Vector3f home_pos_command;
-    home_pos_command = inertial_nav.get_position_neu_cm();
-
-    g2.ze_star_x_cm.set(home_pos_command.x);
-    g2.ze_star_y_cm.set(home_pos_command.y);
-    g2.ze_star_z_cm.set(home_pos_command.z);
-
-    gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] x: %f, y: %f, z: %f", home_pos_command.x, home_pos_command.y, home_pos_command.z);
-#endif
-
 }
 
 // waits for the start time of the show
@@ -561,6 +548,19 @@ void ModeDroneShow::takeoff_start()
 
 	// also reset the landing detector state
 	copter.set_land_complete(false);
+
+#if MODE_DYNAMIC_RTL == ENABLE
+    status_flag = 0;
+    Vector3f home_pos_command;
+    home_pos_command = inertial_nav.get_position_neu_cm();
+
+    g2.ze_star_x_cm.set(home_pos_command.x);
+    g2.ze_star_y_cm.set(home_pos_command.y);
+    g2.ze_star_z_cm.set(home_pos_command.z);
+
+    gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] home_pos_command x: %f, y: %f, z: %f", home_pos_command.x, home_pos_command.y, home_pos_command.z);
+#endif
+
 }
 
 // performs the takeoff stage
@@ -782,20 +782,20 @@ bool ModeDroneShow::check_reaching_rtl_altitude_ys()
     switch(status_flag){
         case 0:{
 
-            if (home_pos_command.pos.z >= g2.ze_star_alt_cm){
+            if (home_pos_command.pos.z - g2.ze_star_z_cm >= g2.ze_star_alt_cm){
                 status_flag = 1;
                 gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] First x: %f, y: %f, z: %f", 
-                    home_pos_command.pos.x, home_pos_command.pos.y, home_pos_command.pos.z);
+                    home_pos_command.pos.x, home_pos_command.pos.y, home_pos_command.pos.z - g2.ze_star_z_cm);
             }
 
             return false;
         }break;
         case 1:{
             
-            if (home_pos_command.pos.z <= g2.ze_star_alt_cm - 50.f){
+            if (home_pos_command.pos.z - g2.ze_star_z_cm <= g2.ze_star_alt_cm - 50.f){
                 // status_flag = 2;
                 gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] LAND x: %f, y: %f, z: %f", 
-                    home_pos_command.pos.x, home_pos_command.pos.y, home_pos_command.pos.z);
+                    home_pos_command.pos.x, home_pos_command.pos.y, home_pos_command.pos.z - g2.ze_star_z_cm);
 
                 return true;
             }

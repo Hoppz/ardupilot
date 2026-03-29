@@ -51,7 +51,7 @@ struct boardinfo board_info = {
 };
 
 #ifndef HAL_BOOTLOADER_TIMEOUT
-#define HAL_BOOTLOADER_TIMEOUT 5000
+#define HAL_BOOTLOADER_TIMEOUT 300
 #endif
 
 #ifndef HAL_STAY_IN_BOOTLOADER_VALUE
@@ -66,6 +66,33 @@ AP_FlashIface_JEDEC ext_flash;
 static BL_Network network;
 #endif
 
+static void hold_fmu_pwm_pins_low_early(void)
+{
+#if defined(STM32H7)
+    static const ioline_t pwm_lines[] = {
+        PAL_LINE(GPIOC, 6U),   // PC6
+        PAL_LINE(GPIOC, 7U),   // PC7
+        PAL_LINE(GPIOD, 14U),  // PD14
+        PAL_LINE(GPIOD, 15U),  // PD15
+        PAL_LINE(GPIOI, 2U),   // PI2
+        PAL_LINE(GPIOI, 5U),   // PI5
+        PAL_LINE(GPIOI, 6U),   // PI6
+        PAL_LINE(GPIOI, 7U),   // PI7
+        PAL_LINE(GPIOB, 0U),   // PB0
+        PAL_LINE(GPIOB, 1U),   // PB1
+        PAL_LINE(GPIOE, 9U),   // PE9
+        PAL_LINE(GPIOE, 11U),  // PE11
+        PAL_LINE(GPIOF, 6U),   // PF6
+        PAL_LINE(GPIOF, 7U),   // PF7
+    };
+
+    for (uint8_t i = 0; i < ARRAY_SIZE(pwm_lines); i++) {
+        palSetLineMode(pwm_lines[i], PAL_MODE_OUTPUT_PUSHPULL);
+        palClearLine(pwm_lines[i]);
+    }
+#endif
+}
+
 int main(void)
 {
 #ifdef AP_BOOTLOADER_CUSTOM_HERE4
@@ -73,6 +100,8 @@ int main(void)
 #endif
 
     flash_init();
+
+    hold_fmu_pwm_pins_low_early();
 
 #ifdef STM32H7
     check_ecc_errors();
