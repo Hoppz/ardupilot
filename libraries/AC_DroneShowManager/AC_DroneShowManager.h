@@ -42,9 +42,8 @@ enum DroneShowModeStage {
     DroneShow_Landing,
     DroneShow_Landed,
     DroneShow_Error,
-// #if MODE_DYNAMIC_RTL == ENABLE
-    Dynamic_Rtl,
-// #endif
+    DroneShow_DynamicRtlNav,   // Navigating to home + 2m after show
+    DroneShow_DynamicRtlLand,  // Smooth landing after reaching home + 2m
 };
 
 // Enum representing the flags in the control mode bitmasp

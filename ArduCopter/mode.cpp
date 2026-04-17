@@ -185,12 +185,6 @@ Mode *Copter::mode_from_mode_num(const Mode::Number mode)
             break;
 #endif
 
-#if MODE_DYNAMIC_RTL == ENABLED
-        case Mode::Number::DYNAMIC_RTL:
-            ret = &mode_dynamic_rtl;
-            break;
-#endif
-
         default:
             break;
     }

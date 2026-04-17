@@ -710,13 +710,6 @@ public:
     AP_Float pldp_range_finder_minimum_m;
     AP_Float pldp_delay_s;
     AP_Float pldp_descent_speed_ms;
-
-#if MODE_DYNAMIC_RTL == ENABLE
-    AP_Float ze_star_alt_cm;
-    AP_Float ze_star_x_cm;
-    AP_Float ze_star_y_cm;
-    AP_Float ze_star_z_cm;
-#endif
 };
 
 extern const AP_Param::Info        var_info[];

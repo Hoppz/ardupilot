@@ -1,10 +1,7 @@
 #include "Copter.h"
 
 #include <skybrush/colors.h>
-
-#if MODE_DYNAMIC_RTL == ENABLE
-    #include <AP_AHRS/AP_AHRS.h>
-#endif
+#include <AP_AHRS/AP_AHRS.h>
 
 #if MODE_GUIDED_ENABLED == ENABLED
 
@@ -180,8 +177,14 @@ void ModeDroneShow::run()
         error_run();
         break;
 
-    case Dynamic_Rtl:
-        copter.set_mode(Mode::Number::DYNAMIC_RTL, ModeReason::MISSION_END);
+    case DroneShow_DynamicRtlNav:
+        // flying to home + 2m after the show
+        dynamic_rtl_nav_run();
+        break;
+
+    case DroneShow_DynamicRtlLand:
+        // smooth landing after reaching home + 2m
+        dynamic_rtl_land_run();
         break;
 
     default:
@@ -219,6 +222,13 @@ bool ModeDroneShow::get_wp(Location& destination) const
         return copter.mode_land.get_wp(destination);
     case DroneShow_RTL:
         return copter.mode_rtl.get_wp(destination);
+    case DroneShow_DynamicRtlNav: {
+        // Dynamic-RTL nav target = home position with altitude 2m above home.
+        const Location home = AP::ahrs().get_home();
+        destination = Location(home.lat, home.lng, 200 /*cm*/,
+                               Location::AltFrame::ABOVE_HOME);
+        return true;
+    }
     default:
         return false;
     }
@@ -233,6 +243,10 @@ int32_t ModeDroneShow::wp_bearing() const
         return copter.mode_land.wp_bearing();
     case DroneShow_RTL:
         return copter.mode_rtl.wp_bearing();
+    case DroneShow_DynamicRtlNav: {
+        const Vector2f target_xy{_dyn_rtl_target_neu_cm.x, _dyn_rtl_target_neu_cm.y};
+        return get_bearing_cd(inertial_nav.get_position_xy_cm(), target_xy);
+    }
     default:
         return false;
     }
@@ -247,6 +261,11 @@ uint32_t ModeDroneShow::wp_distance() const
         return copter.mode_land.wp_distance();
     case DroneShow_RTL:
         return copter.mode_rtl.wp_distance();
+    case DroneShow_DynamicRtlNav: {
+        const Vector2f target_xy{_dyn_rtl_target_neu_cm.x, _dyn_rtl_target_neu_cm.y};
+        const Vector2f err = target_xy - inertial_nav.get_position_xy_cm();
+        return (uint32_t)err.length();
+    }
     default:
         return false;
     }
@@ -264,7 +283,8 @@ float ModeDroneShow::crosstrack_error() const
     case DroneShow_RTL:
         return copter.mode_rtl.crosstrack_error();
     default:
-        return false;
+        // DynamicRtlNav/DynamicRtlLand have no path to cross-track against.
+        return 0.0f;
     }
 }
 
@@ -272,6 +292,7 @@ bool ModeDroneShow::is_landing() const
 {
     switch (_stage) {
         case DroneShow_Landing:
+        case DroneShow_DynamicRtlLand:
             return true;
         case DroneShow_RTL:
             return copter.mode_rtl.is_landing();
@@ -549,18 +570,8 @@ void ModeDroneShow::takeoff_start()
 	// also reset the landing detector state
 	copter.set_land_complete(false);
 
-#if MODE_DYNAMIC_RTL == ENABLE
+    // reset dynamic-RTL altitude trigger state so each takeoff starts clean
     status_flag = 0;
-    Vector3f home_pos_command;
-    home_pos_command = inertial_nav.get_position_neu_cm();
-
-    g2.ze_star_x_cm.set(home_pos_command.x);
-    g2.ze_star_y_cm.set(home_pos_command.y);
-    g2.ze_star_z_cm.set(home_pos_command.z);
-
-    gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] home_pos_command x: %f, y: %f, z: %f", home_pos_command.x, home_pos_command.y, home_pos_command.z);
-#endif
-
 }
 
 // performs the takeoff stage
@@ -582,7 +593,7 @@ void ModeDroneShow::takeoff_run()
         // if the takeoff has finished, move to the next stage
         
         // hoppz 
-        gcs().send_text(MAV_SEVERITY_INFO, "[takeoff_run] takeoff completed");
+        gcs().send_text(MAV_SEVERITY_INFO, "[takeoff] takeoff completed");
         // hoppz
 
         completed = true;
@@ -595,20 +606,20 @@ void ModeDroneShow::takeoff_run()
         switch (_next_stage_after_takeoff) {
             case DroneShow_Loiter:
                 // hoppz
-                gcs().send_text(MAV_SEVERITY_CRITICAL,"[takeoff_run] start loiter");
+                gcs().send_text(MAV_SEVERITY_CRITICAL,"[takeoff] start loiter");
                 // hoppz
                 loiter_start();
                 break;
             case DroneShow_Landing:
             case DroneShow_Landed:
                 // hoppz
-                gcs().send_text(MAV_SEVERITY_CRITICAL,"[takeoff_run] start landing");
+                gcs().send_text(MAV_SEVERITY_CRITICAL,"[takeoff] start landing");
                 // hoppz
                 landing_start();
                 break;
             default:
                 // hoppz
-                gcs().send_text(MAV_SEVERITY_INFO,"[takeoff_run] start performing!!!");
+                gcs().send_text(MAV_SEVERITY_INFO,"[takeoff] start performing!!!");
                 // hoppz
                 performing_start();
         }
@@ -706,7 +717,7 @@ void ModeDroneShow::performing_start()
 {
     _set_stage(DroneShow_Performing);
     // hoppz
-    gcs().send_text(MAV_SEVERITY_INFO,"[performing_start] get in");
+    gcs().send_text(MAV_SEVERITY_INFO,"[performing] get in");
     // hoppz
 
 #if AP_LANDINGGEAR_ENABLED
@@ -729,15 +740,16 @@ void ModeDroneShow::performing_run()
     uint32_t now = AP_HAL::millis();
     uint32_t target_dt = copter.g2.drone_show_manager.get_controller_update_delta_msec();
 
-#if MODE_DYNAMIC_RTL == ENABLE
-
-    if (check_reaching_rtl_altitude_ys()){
-        _set_stage(Dynamic_Rtl);
-        gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] DYNAMIC_RTL start!");
-        copter.set_mode(Mode::Number::DYNAMIC_RTL, ModeReason::MISSION_END);
+    // Internal dynamic-RTL trigger: once the altitude has risen past a fixed
+    // threshold above home and then descended back past it with hysteresis,
+    // start the internal nav-to-home + smooth-land sequence. Unlike the old
+    // set_mode(DYNAMIC_RTL) path, this stays inside DRONE_SHOW and keeps
+    // pos_control active, so there is no stopping-point reset and no stutter.
+    if (check_reaching_rtl_altitude()) {
+        gcs().send_text(MAV_SEVERITY_INFO, "[performing] dynamic RTL start");
+        dynamic_rtl_nav_start();
         exited_mode = 1;
     }
-#endif
 
     if (now - last_guided_command >= target_dt) {
         if (!send_guided_mode_command_during_performance()) {
@@ -769,57 +781,143 @@ void ModeDroneShow::performing_run()
     }
 }
 
-/*===========================Serein_Y===========================*/
-
-#if MODE_DYNAMIC_RTL == ENABLE
-
-bool ModeDroneShow::check_reaching_rtl_altitude_ys()
+// Two-phase altitude check used to trigger the internal dynamic-RTL flow.
+// Returns true the first frame after the drone has (1) climbed above
+// TRIG_ALT_CM relative to home, and (2) subsequently descended back through
+// TRIG_ALT_CM minus a hysteresis band. The state machine does not self-reset,
+// so once this fires the caller is expected to transition out of the
+// performing stage. status_flag is cleared on each takeoff_start().
+bool ModeDroneShow::check_reaching_rtl_altitude()
 {
-    AC_DroneShowManager::GuidedModeCommand home_pos_command;
+    // Hard-coded altitude threshold and hysteresis (formerly ze_star_alt_cm
+    // parameter, default 600cm, with a 50cm descent hysteresis).
+    constexpr float TRIG_ALT_CM    = 600.0f;
+    constexpr float TRIG_HYSTER_CM = 50.0f;
 
-    home_pos_command.pos = inertial_nav.get_position_neu_cm();
+    // Resolve home position in NEU cm relative to EKF origin (formerly stored
+    // in the ze_star_x/y/z_cm parameters at takeoff).
+    const Location home = AP::ahrs().get_home();
+    Vector3f home_neu_cm;
+    if (!home.get_vector_from_origin_NEU(home_neu_cm)) {
+        // Can't resolve home - don't trigger this frame.
+        return false;
+    }
 
-    switch(status_flag){
-        case 0:{
+    const Vector3f &cur_pos = inertial_nav.get_position_neu_cm();
+    const float alt_above_takeoff_cm = cur_pos.z - home_neu_cm.z;
 
-            if (home_pos_command.pos.z - g2.ze_star_z_cm >= g2.ze_star_alt_cm){
+    switch (status_flag) {
+        case 0:
+            if (alt_above_takeoff_cm >= TRIG_ALT_CM) {
                 status_flag = 1;
-                gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] First x: %f, y: %f, z: %f", 
-                    home_pos_command.pos.x, home_pos_command.pos.y, home_pos_command.pos.z - g2.ze_star_z_cm);
             }
-
             return false;
-        }break;
-        case 1:{
-            
-            if (home_pos_command.pos.z - g2.ze_star_z_cm <= g2.ze_star_alt_cm - 50.f){
-                // status_flag = 2;
-                gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] LAND x: %f, y: %f, z: %f", 
-                    home_pos_command.pos.x, home_pos_command.pos.y, home_pos_command.pos.z - g2.ze_star_z_cm);
-
+        case 1:
+            if (alt_above_takeoff_cm <= TRIG_ALT_CM - TRIG_HYSTER_CM) {
                 return true;
             }
-
             return false;
-        }break;
-        default:{
+        default:
             status_flag = 0;
-                gcs().send_text(MAV_SEVERITY_INFO, "[Serein_Y] Default x: %f, y: %f, z: %f", 
-                    home_pos_command.pos.x, home_pos_command.pos.y, home_pos_command.pos.z);
             return false;
-        }break;
     }
-    return true;
 }
-
-/*===========================Serein_Y===========================*/
-#endif
 
 bool ModeDroneShow::performing_completed() const
 {
     // TODO(ntamas): what if we are late and we are not at the designated landing
     // position yet?
     return copter.g2.drone_show_manager.get_time_until_landing_sec() <= 0;
+}
+
+// Dynamic-RTL navigation stage: fly from wherever we are in performing to a
+// point 2m above the takeoff/home position, keeping pos_control active.
+// Deliberately avoids wp_nav->wp_and_spline_init(), init_xy_controller(),
+// and init_z_controller() because those would reset pos_control's target
+// velocity to zero and cause a visible stutter. pos_control is already
+// active (driven by mode_guided during performing), so the existing speed
+// and acceleration limits are preserved.
+void ModeDroneShow::dynamic_rtl_nav_start()
+{
+    _set_stage(DroneShow_DynamicRtlNav);
+
+    // Target: home + 2m altitude, expressed in NEU cm relative to the EKF
+    // origin (same frame as pos_control targets).
+    const Location home = AP::ahrs().get_home();
+    Vector3f home_neu_cm;
+    if (!home.get_vector_from_origin_NEU(home_neu_cm)) {
+        // Without a resolvable home we can't navigate there - fall back to
+        // the original in-place landing behaviour.
+        gcs().send_text(MAV_SEVERITY_WARNING,
+                        "[DroneShow] home unavailable, landing in place");
+        landing_start();
+        return;
+    }
+
+    _dyn_rtl_target_neu_cm = Vector3f(home_neu_cm.x,
+                                      home_neu_cm.y,
+                                      home_neu_cm.z + 200.0f);
+
+    // Hold yaw; pos_control and attitude_control stay active and will be
+    // driven by dynamic_rtl_nav_run() from here on.
+    auto_yaw.set_mode(AutoYaw::Mode::HOLD);
+}
+
+// Dynamic-RTL navigation stage run loop. Feeds pos_control a static target
+// (home + 2m), letting its internal jerk-limited kinematic shaping
+// transition smoothly from the current velocity. Hands over to the land
+// stage once we are close to the target with low horizontal speed.
+void ModeDroneShow::dynamic_rtl_nav_run()
+{
+    if (is_disarmed_or_landed()) {
+        make_safe_ground_handling();
+        return;
+    }
+
+    motors->set_desired_spool_state(AP_Motors::DesiredSpoolState::THROTTLE_UNLIMITED);
+
+    // XY: target position, zero target velocity, zero target acceleration.
+    Vector2p target_xy{_dyn_rtl_target_neu_cm.x, _dyn_rtl_target_neu_cm.y};
+    Vector2f zero_vel;
+    Vector2f zero_acc;
+    pos_control->input_pos_vel_accel_xy(target_xy, zero_vel, zero_acc);
+    pos_control->update_xy_controller();
+
+    // Z: slew to home + 2m using pos_control's default kinematic path.
+    pos_control->set_alt_target_with_slew(_dyn_rtl_target_neu_cm.z);
+    pos_control->update_z_controller();
+
+    attitude_control->input_thrust_vector_heading(pos_control->get_thrust_vector(),
+                                                  auto_yaw.get_heading());
+
+    if (dynamic_rtl_nav_completed()) {
+        dynamic_rtl_land_start();
+    }
+}
+
+// Returns true once the vehicle has settled near the 3D target (home + 2m)
+// both horizontally and vertically. The old DYNAMIC_RTL used
+// wp_nav->reached_wp_destination() which is a 3D WPNAV_RADIUS check, so we
+// mirror that here by combining XY and Z position/velocity tolerances. The
+// speed checks prevent prematurely entering the land stage while the drone
+// is still coasting or descending past the target.
+bool ModeDroneShow::dynamic_rtl_nav_completed() const
+{
+    const Vector3f &cur_pos = inertial_nav.get_position_neu_cm();
+    const Vector3f &cur_vel = inertial_nav.get_velocity_neu_cms();
+
+    // Horizontal: target XY vs current XY
+    const Vector2f target_xy{_dyn_rtl_target_neu_cm.x, _dyn_rtl_target_neu_cm.y};
+    const Vector2f xy_err = target_xy - cur_pos.xy();
+    const float horiz_speed = cur_vel.xy().length();
+
+    // Vertical: target Z vs current Z
+    const float z_err = fabsf(_dyn_rtl_target_neu_cm.z - cur_pos.z);
+    const float vert_speed = fabsf(cur_vel.z);
+
+    // Position tolerance 30cm XY / 30cm Z, speed tolerance 50cm/s each axis.
+    return (xy_err.length() < 30.0f) && (horiz_speed < 50.0f)
+        && (z_err < 30.0f) && (vert_speed < 50.0f);
 }
 
 // starts the phase where we are landing at the place where we are, used at
@@ -861,6 +959,82 @@ bool ModeDroneShow::landing_completed() const
     } else {
         return false;
     }
+}
+
+// Dynamic-RTL land stage start. Follows the ModeRTL::land_start() pattern:
+// only (re-)initialise the XY/Z controllers if they are not already active.
+// Because we enter this stage directly from dynamic_rtl_nav_run() while
+// pos_control has been continuously active, the init guards will not fire
+// and no stopping-point reset occurs - the descent is perfectly smooth.
+void ModeDroneShow::dynamic_rtl_land_start()
+{
+    _set_stage(DroneShow_DynamicRtlLand);
+
+    // Restore horizontal speed/accel limits to the waypoint-controller
+    // defaults for landing (same as ModeRTL::land_start()). This does not
+    // touch the controller's active target, only its limit parameters.
+    pos_control->set_max_speed_accel_xy(wp_nav->get_default_speed_xy(),
+                                        wp_nav->get_wp_acceleration());
+    pos_control->set_correction_speed_accel_xy(wp_nav->get_default_speed_xy(),
+                                               wp_nav->get_wp_acceleration());
+
+    if (!pos_control->is_active_xy()) {
+        pos_control->init_xy_controller();
+    }
+    if (!pos_control->is_active_z()) {
+        pos_control->init_z_controller();
+    }
+
+    auto_yaw.set_mode(AutoYaw::Mode::HOLD);
+
+#if AP_LANDINGGEAR_ENABLED
+    copter.landinggear.deploy_for_landing();
+#endif
+#if AP_FENCE_ENABLED
+    copter.fence.auto_disable_fence_for_landing();
+#endif
+}
+
+// Dynamic-RTL land stage run loop. Delegates to the base-class landing
+// controller (which handles the two-stage descent and precision-landing
+// logic) without touching mode_land's state. Auto-disarms and advances to
+// the landed stage once the landing detector confirms touchdown.
+void ModeDroneShow::dynamic_rtl_land_run()
+{
+    // Disarm when the landing detector says we've landed and motors have
+    // spooled to ground idle (mirrors ModeRTL::land_run() behaviour).
+    if (copter.ap.land_complete &&
+        motors->get_spool_state() == AP_Motors::SpoolState::GROUND_IDLE) {
+        copter.arming.disarm(AP_Arming::Method::LANDED);
+    }
+
+    if (is_disarmed_or_landed()) {
+        make_safe_ground_handling();
+        if (dynamic_rtl_land_completed()) {
+            landed_start();
+        }
+        return;
+    }
+
+    motors->set_desired_spool_state(AP_Motors::DesiredSpoolState::THROTTLE_UNLIMITED);
+    land_run_normal_or_precland();
+
+    if (dynamic_rtl_land_completed()) {
+        landed_start();
+    }
+}
+
+// True once the landing detector reports touchdown and the motors have
+// spooled down to ground idle or shut down.
+bool ModeDroneShow::dynamic_rtl_land_completed() const
+{
+    if (_stage != DroneShow_DynamicRtlLand) {
+        return false;
+    }
+    return copter.ap.land_complete && (
+        motors->get_spool_state() == AP_Motors::SpoolState::GROUND_IDLE ||
+        motors->get_spool_state() == AP_Motors::SpoolState::SHUT_DOWN
+    );
 }
 
 // starts the phase where we are returning to our home position, used during

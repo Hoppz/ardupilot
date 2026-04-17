@@ -233,9 +233,6 @@ public:
     friend class ModeLoiter;
     friend class ModePosHold;
     friend class ModeRTL;
-#if MODE_DYNAMIC_RTL == ENABLE
-    friend class ModeDynamicRtl;
-#endif
     friend class ModeSmartRTL;
     friend class ModeSport;
     friend class ModeStabilize;
@@ -1087,9 +1084,6 @@ private:
 #endif
 #if MODE_DRONE_SHOW_ENABLED == ENABLED
     ModeDroneShow mode_drone_show;
-#endif
-#if MODE_DYNAMIC_RTL == ENABLED
-    ModeDynamicRtl mode_dynamic_rtl;
 #endif
 
     // mode.cpp

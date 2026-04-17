@@ -146,20 +146,35 @@ private:
     void performing_run();
     bool performing_completed() const;
 
-    /*=============Serein_Y===========================*/
-#if MODE_DYNAMIC_RTL == ENABLE
-
+    // Two-phase trigger state for dynamic-RTL detection.
+    // 0 = waiting for altitude above TRIG_ALT_CM (relative to home),
+    // 1 = altitude crossed, waiting for descent through hysteresis to trigger.
     uint8_t status_flag;
-    Vector3f home_pos_cm;
 
-    bool check_reaching_rtl_altitude_ys();
+    // Target position for dynamic-RTL navigation phase (home + 2m), stored in
+    // NEU cm relative to the EKF origin (same frame as pos_control targets).
+    Vector3f _dyn_rtl_target_neu_cm;
 
-#endif
-/*=============Serein_Y===========================*/
+    // Returns true the moment the two-phase altitude check fires (drone has
+    // risen above a trigger altitude and then descended back past it with
+    // hysteresis). Used to kick off the internal dynamic-RTL flow.
+    bool check_reaching_rtl_altitude();
 
     void landing_start();
     void landing_run();
     bool landing_completed() const;
+
+    // Dynamic-RTL internal sub-stages (replaces the old DYNAMIC_RTL flight mode).
+    // Stage 1: fly to home + 2m using pos_control (no wp_nav, no controller reset).
+    void dynamic_rtl_nav_start();
+    void dynamic_rtl_nav_run();
+    bool dynamic_rtl_nav_completed() const;
+
+    // Stage 2: smooth land from home + 2m. Reuses already-active pos_control
+    // and the base-class land_run_normal_or_precland() to avoid any re-init.
+    void dynamic_rtl_land_start();
+    void dynamic_rtl_land_run();
+    bool dynamic_rtl_land_completed() const;
 
     void rtl_start();
     void rtl_run();
