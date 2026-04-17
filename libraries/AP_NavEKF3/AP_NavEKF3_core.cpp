@@ -478,6 +478,7 @@ void NavEKF3_core::InitialiseVariablesMag()
 #endif
     needMagBodyVarReset = false;
     needEarthBodyVarReset = false;
+    magTakeoffFusionScale = 1.0f;
 }
 
 /*

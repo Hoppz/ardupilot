@@ -734,6 +734,10 @@ const AP_Param::GroupInfo NavEKF3::var_info2[] = {
     // @Units: m
     AP_GROUPINFO("GPS_VACC_MAX", 10, NavEKF3, _gpsVAccThreshold, 0.0f),
 
+    AP_GROUPINFO("MAG_TKO_EN", 11, NavEKF3, _mag_tko_en, 0),
+    AP_GROUPINFO("MAG_TKO_ALT", 12, NavEKF3, _mag_tko_alt, 10.0f),
+    AP_GROUPINFO("MAG_TKO_TC", 13, NavEKF3, _mag_tko_tc, 20.0f),
+
     AP_GROUPEND
 };
 

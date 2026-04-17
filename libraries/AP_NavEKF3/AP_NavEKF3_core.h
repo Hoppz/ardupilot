@@ -799,6 +799,8 @@ private:
     // determine when to perform fusion of magnetometer measurements
     void SelectMagFusion();
 
+    void updateMagTakeoffFusionScale();
+
     // determine when to perform fusion of true airspeed measurements
     void SelectTasFusion();
 
@@ -1409,6 +1411,7 @@ private:
     ftype posDownAtLastMagReset;    // vertical position last time the mag states were reset (m)
     ftype yawInnovAtLastMagReset;   // magnetic yaw innovation last time the yaw and mag field states were reset (rad)
     QuaternionF quatAtLastMagReset;  // quaternion states last time the mag states were reset
+    ftype magTakeoffFusionScale;
 
     // Used by on ground movement check required when operating on ground without a yaw reference
     ftype gyro_diff;                    // filtered gyro difference (rad/s)

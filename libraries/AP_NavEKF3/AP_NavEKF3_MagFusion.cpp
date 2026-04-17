@@ -210,6 +210,36 @@ void NavEKF3_core::alignYawAngle(const yaw_elements &yawAngData)
     GCS_SEND_TEXT(MAV_SEVERITY_INFO, "EKF3 IMU%u yaw aligned",(unsigned)imu_index);
 }
 
+void NavEKF3_core::updateMagTakeoffFusionScale()
+{
+    if (frontend->_mag_tko_en <= 0 || !is_positive(frontend->_mag_tko_alt)) {
+        magTakeoffFusionScale = 1.0f;
+        return;
+    }
+
+    const bool active = motorsArmed && (dal.get_takeoff_expected() || inFlight || (dal.get_time_flying_ms() > 0));
+    if (!active) {
+        magTakeoffFusionScale = 1.0f;
+        return;
+    }
+
+    const ftype takeoff_hgt = -(stateStruct.position.z - posDownAtTakeoff);
+    if (takeoff_hgt < frontend->_mag_tko_alt) {
+        magTakeoffFusionScale = 0.0f;
+        return;
+    }
+
+    const ftype tc = MAX(ftype(frontend->_mag_tko_tc), ftype(0));
+    if (!is_positive(tc)) {
+        magTakeoffFusionScale = 1.0f;
+        return;
+    }
+
+    const ftype dt_used = is_positive(dt) ? dt : dtEkfAvg;
+    const ftype alpha = constrain_ftype(dt_used / (dt_used + tc), 0.0f, 1.0f);
+    magTakeoffFusionScale = constrain_ftype(magTakeoffFusionScale + alpha * (1.0f - magTakeoffFusionScale), 0.0f, 1.0f);
+}
+
 /********************************************************
 *                   FUSE MEASURED_DATA                  *
 ********************************************************/
@@ -220,6 +250,8 @@ void NavEKF3_core::SelectMagFusion()
     // clear the flag that lets other processes know that the expensive magnetometer fusion operation has been performed on that time step
     // used for load levelling
     magFusePerformed = false;
+
+    updateMagTakeoffFusionScale();
 
     // Store yaw angle when moving for use as a static reference when not moving
     if (!onGroundNotMoving) {
@@ -401,7 +433,7 @@ void NavEKF3_core::SelectMagFusion()
     magDataToFuse = storedMag.recall(magDataDelayed,imuDataDelayed.time_ms);
 
     // Control reset of yaw and magnetic field states if we are using compass data
-    if (magDataToFuse) {
+    if (magDataToFuse && magTakeoffFusionScale > 0.0f) {
         if (yaw_source_reset && (yaw_source_last == AP_NavEKF_Source::SourceYaw::COMPASS ||
                                  yaw_source_last == AP_NavEKF_Source::SourceYaw::GPS_COMPASS_FALLBACK)) {
             magYawResetRequest = true;
@@ -412,7 +444,7 @@ void NavEKF3_core::SelectMagFusion()
 
     // determine if conditions are right to start a new fusion cycle
     // wait until the EKF time horizon catches up with the measurement
-    bool dataReady = (magDataToFuse && statesInitialised && use_compass() && yawAlignComplete);
+    bool dataReady = (magDataToFuse && statesInitialised && use_compass() && yawAlignComplete && magTakeoffFusionScale > 0.0f);
     if (dataReady) {
         // use the simple method of declination to maintain heading if we cannot use the magnetic field states
         if(inhibitMagStates || magStateResetRequest || !magStateInitComplete) {
@@ -504,7 +536,10 @@ void NavEKF3_core::FuseMagnetometer()
     innovMag = MagPred - magDataDelayed.mag;
 
     // scale magnetometer observation error with total angular rate to allow for timing errors
-    const ftype R_MAG = sq(constrain_ftype(frontend->_magNoise, 0.01f, 0.5f)) + sq(frontend->magVarRateScale*imuDataDelayed.delAng.length() / imuDataDelayed.delAngDT);
+    ftype R_MAG = sq(constrain_ftype(frontend->_magNoise, 0.01f, 0.5f)) + sq(frontend->magVarRateScale*imuDataDelayed.delAng.length() / imuDataDelayed.delAngDT);
+    if (magTakeoffFusionScale < 1.0f) {
+        R_MAG /= MAX(magTakeoffFusionScale, ftype(0.01f));
+    }
 
     // calculate common expressions used to calculate observation jacobians an innovation variance for each component
     const Vector9 SH_MAG {
@@ -945,6 +980,10 @@ bool NavEKF3_core::fuseEulerYaw(yawFusionMethod method)
         R_YAW = sq(MAX(extNavYawAngDataDelayed.yawAngErr, 0.05f));
         break;
 #endif
+    }
+
+    if (method == yawFusionMethod::MAGNETOMETER && magTakeoffFusionScale < 1.0f) {
+        R_YAW /= MAX(magTakeoffFusionScale, ftype(0.01f));
     }
 
     // determine if a 321 or 312 Euler sequence is best

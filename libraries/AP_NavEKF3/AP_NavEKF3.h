@@ -448,6 +448,9 @@ private:
     AP_Int8 _primary_core;          // initial core number
     AP_Enum<LogLevel> _log_level;   // log verbosity level
     AP_Float _gpsVAccThreshold;     // vertical accuracy threshold to use GPS as an altitude source
+    AP_Int8 _mag_tko_en;
+    AP_Float _mag_tko_alt;
+    AP_Float _mag_tko_tc;
 
 // Possible values for _flowUse
 #define FLOW_USE_NONE    0
