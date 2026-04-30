@@ -748,7 +748,9 @@ void ModeDroneShow::performing_run()
     if (check_reaching_rtl_altitude()) {
         gcs().send_text(MAV_SEVERITY_INFO, "[performing] dynamic RTL start");
         dynamic_rtl_nav_start();
-        exited_mode = 1;
+        //! avoid :  flow_of_ctrl, pos_control must be fed in every tick
+        dynamic_rtl_nav_run();   
+        return ;
     }
 
     if (now - last_guided_command >= target_dt) {
