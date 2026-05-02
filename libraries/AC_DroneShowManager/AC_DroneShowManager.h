@@ -95,6 +95,12 @@ enum TimeSyncMode {
     TimeSyncMode_GPS = 1 // Use SHOW_START_TIME and synchronize based on GPS time
 };
 
+// SHOW_DYNRTL: internal dynamic-RTL path after the performing-stage altitude trigger
+enum DroneShowDynamicRtlMode {
+    DroneShowDynamicRtlMode_NavThenLand = 0,  // Fly to home + 2m, then smooth land (default)
+    DroneShowDynamicRtlMode_DirectLand = 1,   // Skip XY/Z nav; begin landing phase at current state
+};
+
 /// @class  AC_DroneShowManager
 /// @brief  Class managing the trajectory and light program of a drone show
 class AC_DroneShowManager {
@@ -479,6 +485,10 @@ public:
     // Returns whether the manager uses GPS time to start the show
     bool uses_gps_time_for_show_start() const { return _params.time_sync_mode == TimeSyncMode_GPS; }
 
+    // Internal dynamic-RTL (after performing altitude trigger): if true, skip nav to home+2m
+    // and enter the landing phase immediately. See SHOW_DYNRTL / DroneShowDynamicRtlMode.
+    bool dynamic_rtl_skip_nav_to_home() const;
+
     // Writes the log message specific to the drone show manager subsystem into the logs
     void write_log_message() const;
 
@@ -552,6 +562,9 @@ private:
 
         // Time synchronization mode
         AP_Int8 time_sync_mode;
+
+        // Internal dynamic-RTL: 0 = nav to home+2m then land, 1 = land immediately (no nav phase)
+        AP_Int8 dynamic_rtl_mode;
 
         struct {
             // Specifies where the a given LED light channel of the show should be sent

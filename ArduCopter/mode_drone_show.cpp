@@ -9,6 +9,20 @@
  * Implementation of drone show flight mode
  */
 
+namespace {
+// Immediate disarm during Dynamic-RTL land when fused NEU altitude is within this
+// distance (cm) of home altitude. Intended for RTK-class vertical aiding; baro-only
+// setups should not rely on this threshold.
+static constexpr float DYNAMIC_RTL_HOME_ALT_DISARM_TOLERANCE_CM = 3.0f;
+// Still require horizontal proximity to home (cm) so altitude-only match cannot
+// trip far from the landing point.
+static constexpr float DYNAMIC_RTL_HOME_ALT_DISARM_XY_GUARD_CM = 150.0f;
+// Reject triggers while descending faster than this (cm/s, NEU Z).
+static constexpr float DYNAMIC_RTL_HOME_ALT_DISARM_MAX_VERT_SPEED_CMS = 80.0f;
+// Consecutive OK scheduler iterations before disarming (noise rejection).
+static constexpr uint8_t DYNAMIC_RTL_HOME_ALT_DISARM_DEBOUNCE = 10U;
+}  // namespace
+
 bool AC_DroneShowManager_Copter::get_current_location(Location& loc) const
 {
     return copter.ahrs.get_location(loc);
@@ -32,7 +46,8 @@ void AC_DroneShowManager_Copter::_request_switch_to_show_mode()
 ModeDroneShow::ModeDroneShow(void) : Mode(),
     _stage(DroneShow_Off),
     _last_home_position_reset_attempt_at(0),
-    _last_stage_change_at(0)
+    _last_stage_change_at(0),
+    _dyn_rtl_home_alt_disarm_debounce(0)
 {
 }
 
@@ -183,7 +198,7 @@ void ModeDroneShow::run()
         break;
 
     case DroneShow_DynamicRtlLand:
-        // smooth landing after reaching home + 2m
+        // smooth landing (after nav to home+2m, or immediately if SHOW_DYNRTL=1)
         dynamic_rtl_land_run();
         break;
 
@@ -746,11 +761,18 @@ void ModeDroneShow::performing_run()
     // set_mode(DYNAMIC_RTL) path, this stays inside DRONE_SHOW and keeps
     // pos_control active, so there is no stopping-point reset and no stutter.
     if (check_reaching_rtl_altitude()) {
-        gcs().send_text(MAV_SEVERITY_INFO, "[performing] dynamic RTL start");
-        dynamic_rtl_nav_start();
-        //! avoid :  flow_of_ctrl, pos_control must be fed in every tick
-        dynamic_rtl_nav_run();   
-        return ;
+        if (copter.g2.drone_show_manager.dynamic_rtl_skip_nav_to_home()) {
+            gcs().send_text(MAV_SEVERITY_INFO,
+                            "[performing] dynamic RTL direct land (SHOW_DYNRTL=1)");
+            dynamic_rtl_land_start();
+            dynamic_rtl_land_run();
+        } else {
+            gcs().send_text(MAV_SEVERITY_INFO, "[performing] dynamic RTL nav+land");
+            dynamic_rtl_nav_start();
+            // pos_control must be fed every tick; run once after stage switch
+            dynamic_rtl_nav_run();
+        }
+        return;
     }
 
     if (now - last_guided_command >= target_dt) {
@@ -995,6 +1017,8 @@ void ModeDroneShow::dynamic_rtl_land_start()
 #if AP_FENCE_ENABLED
     copter.fence.auto_disable_fence_for_landing();
 #endif
+
+    _dyn_rtl_home_alt_disarm_debounce = 0;
 }
 
 // Dynamic-RTL land stage run loop. Delegates to the base-class landing
@@ -1008,6 +1032,41 @@ void ModeDroneShow::dynamic_rtl_land_run()
     if (copter.ap.land_complete &&
         motors->get_spool_state() == AP_Motors::SpoolState::GROUND_IDLE) {
         copter.arming.disarm(AP_Arming::Method::LANDED);
+    }
+
+    // Optional early lock-out: when EKF position reports within 2cm of home
+    // altitude (and horizontal/vertical-speed guards pass), disarm immediately
+    // instead of waiting for the landing detector. Only use with trusted vertical
+    // position (e.g. RTK height); debouncing reduces single-frame noise trips.
+    if (motors->armed() && copter.ap.auto_armed) {
+        const Location home = AP::ahrs().get_home();
+        Vector3f home_neu_cm;
+        if (home.get_vector_from_origin_NEU(home_neu_cm)) {
+            const Vector3f &cur_pos = inertial_nav.get_position_neu_cm();
+            const Vector3f &cur_vel = inertial_nav.get_velocity_neu_cms();
+            const Vector2f xy_err{home_neu_cm.x - cur_pos.x, home_neu_cm.y - cur_pos.y};
+            const float z_err_abs = fabsf(cur_pos.z - home_neu_cm.z);
+            const bool proximity_ok =
+                (xy_err.length() <= DYNAMIC_RTL_HOME_ALT_DISARM_XY_GUARD_CM) &&
+                (z_err_abs <= DYNAMIC_RTL_HOME_ALT_DISARM_TOLERANCE_CM) &&
+                (fabsf(cur_vel.z) <= DYNAMIC_RTL_HOME_ALT_DISARM_MAX_VERT_SPEED_CMS);
+            if (proximity_ok) {
+                if (_dyn_rtl_home_alt_disarm_debounce < 254) {
+                    _dyn_rtl_home_alt_disarm_debounce++;
+                }
+                if (_dyn_rtl_home_alt_disarm_debounce >= DYNAMIC_RTL_HOME_ALT_DISARM_DEBOUNCE) {
+                    gcs().send_text(MAV_SEVERITY_INFO,
+                                    "DroneShow: disarm home-alt %.1fcm debounced",
+                                    static_cast<double>(z_err_abs));
+                    copter.arming.disarm(AP_Arming::Method::LANDED);
+                    _dyn_rtl_home_alt_disarm_debounce = 0;
+                }
+            } else {
+                _dyn_rtl_home_alt_disarm_debounce = 0;
+            }
+        } else {
+            _dyn_rtl_home_alt_disarm_debounce = 0;
+        }
     }
 
     if (is_disarmed_or_landed()) {

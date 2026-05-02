@@ -6,14 +6,14 @@
 
 #include "ap_version.h"
 
-#define THISFIRMWARE "Zhier V4.5.22"
+#define THISFIRMWARE "Zhier V4.5.24"
 
 // the following line is parsed by the autotest scripts
-#define FIRMWARE_VERSION 4,5,22,FIRMWARE_VERSION_TYPE_OFFICIAL
+#define FIRMWARE_VERSION 4,5,24,FIRMWARE_VERSION_TYPE_OFFICIAL
 
 #define FW_MAJOR 4
 #define FW_MINOR 5
-#define FW_PATCH 22
+#define FW_PATCH 24
 #define FW_TYPE FIRMWARE_VERSION_TYPE_OFFICIAL
 
 #include <AP_Common/AP_FWVersionDefine.h>

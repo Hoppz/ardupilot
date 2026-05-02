@@ -155,6 +155,10 @@ private:
     // NEU cm relative to the EKF origin (same frame as pos_control targets).
     Vector3f _dyn_rtl_target_neu_cm;
 
+    // Debounce counter for optional immediate disarm when altitude matches home
+    // within a tight tolerance during Dynamic-RTL land (see cpp for guards).
+    uint8_t _dyn_rtl_home_alt_disarm_debounce;
+
     // Returns true the moment the two-phase altitude check fires (drone has
     // risen above a trigger altitude and then descended back past it with
     // hysteresis). Used to kick off the internal dynamic-RTL flow.

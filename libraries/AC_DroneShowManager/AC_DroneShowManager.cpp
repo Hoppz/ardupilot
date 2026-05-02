@@ -313,6 +313,13 @@ const AP_Param::GroupInfo AC_DroneShowManager::var_info[] = {
     // @User: Standard
     AP_GROUPINFO("MAX_Z_ERR", 25, AC_DroneShowManager, _params.max_z_drift_during_show_m, DEFAULT_MAX_Z_DRIFT_METERS),
 
+    // @Param: DYNRTL
+    // @DisplayName: Dynamic RTL path after show
+    // @Description: When internal dynamic RTL is triggered near end of show (altitude-based): 0 = fly to home + 2m then land; 1 = skip that navigation and start the landing phase at the current position (same land controller; no XY move to home first). Use 1 only when you intentionally want to land in place.
+    // @Values: 0:NavThenLand,1:DirectLand
+    // @User: Standard
+    AP_GROUPINFO("DYNRTL", 26, AC_DroneShowManager, _params.dynamic_rtl_mode, DroneShowDynamicRtlMode_NavThenLand),
+
     // @Param: LAND_RLT_ALT
     // @DisplayName: altitude switch rtl mode when landing
     // @Description:  altitude switch rtl mode when landing
@@ -322,7 +329,7 @@ const AP_Param::GroupInfo AC_DroneShowManager::var_info[] = {
     // @User: Standard
     // AP_GROUPINFO("LAND_RLT_ALT", 26, AC_DroneShowManager, _params.switch_rtl_altitude_m, DEFAULT_LAND_RTL_ALT),
 
-    // Currently used max parameter ID: 25; update this if you add more parameters.
+    // Currently used max parameter ID: 26; update this if you add more parameters.
     // Note that the max parameter ID may appear in the middle of the above list.
 
     AP_GROUPEND
@@ -816,6 +823,11 @@ bool AC_DroneShowManager::get_global_takeoff_position(Location& loc) const
     _tentative_show_coordinate_system.convert_show_to_global_coordinate(vec, loc);
 
     return true;
+}
+
+bool AC_DroneShowManager::dynamic_rtl_skip_nav_to_home() const
+{
+    return _params.dynamic_rtl_mode.get() == DroneShowDynamicRtlMode_DirectLand;
 }
 
 int64_t AC_DroneShowManager::get_time_until_start_usec() const
