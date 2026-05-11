@@ -1058,7 +1058,8 @@ void ModeDroneShow::dynamic_rtl_land_run()
                     gcs().send_text(MAV_SEVERITY_INFO,
                                     "DroneShow: disarm home-alt %.1fcm debounced",
                                     static_cast<double>(z_err_abs));
-                    copter.arming.disarm(AP_Arming::Method::LANDED);
+                    copter.arming.disarm(AP_Arming::Method::TERMINATION);
+                    AP::motors()->set_desired_spool_state(AP_Motors::DesiredSpoolState::SHUT_DOWN);
                     _dyn_rtl_home_alt_disarm_debounce = 0;
                 }
             } else {
